@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Opus 5.5 Builds</title>
+<meta name="description" content="15 builds made with Claude Opus 5.5, variations of the Code Bear 'Top 15' video. Click a card to play.">
+<style>
+  :root {
+    --bg: #0f172a; --card: #1e293b; --text: #e2e8f0; --text2: #cbd5e1; --muted: #94a3b8;
+    --orange: #fb923c; --teal: #2dd4bf; --line: #334155;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header, main, footer { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
+  header { padding-top: 40px; padding-bottom: 24px; }
+  h1 { margin: 0 0 8px; font-size: clamp(28px, 5vw, 40px); line-height: 1.15; }
+  h1 span { color: var(--orange); }
+  header p { margin: 0 0 12px; color: var(--text2); max-width: 70ch; }
+  header nav { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 15px; }
+  a { color: var(--teal); }
+  .grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+  @media (max-width: 400px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+  .card:hover, .card:focus-within { border-color: var(--orange); }
+  .shot { display: block; aspect-ratio: 16 / 9; background: #000; }
+  .shot img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .meta { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .num { font-weight: 700; color: var(--orange); }
+  .tag { border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; }
+  h2 { margin: 0; font-size: 19px; }
+  h2 a { color: var(--text); text-decoration: none; }
+  h2 a:hover { text-decoration: underline; }
+  .desc { margin: 0; color: var(--text2); font-size: 15px; }
+  .credit { margin: 0; color: var(--muted); font-size: 13px; }
+  .actions { margin-top: auto; padding-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn { display: inline-block; padding: 6px 14px; border-radius: 6px; background: var(--orange); color: #0f172a; font-weight: 600; font-size: 14px; text-decoration: none; }
+  .btn.alt { background: transparent; color: var(--teal); border: 1px solid var(--line); }
+  .btn:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+  footer { padding-top: 32px; padding-bottom: 40px; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>15 builds with Claude <span>Opus 5.5</span></h1>
+  <p>Each build is a variation of one entry in the video <a href="https://www.youtube.com/watch?v=dw4rYWy8nLw">Top 15 Things built with Claude OPUS 5.5</a> by Code Bear. A variation keeps the technique and the look of the original and changes the subject. Click a card to play. Turn on sound for #2, #3, #4 and #15.</p>
+  <nav>
+    <a href="https://github.com/az9713/opus-5.5-builds">Source on GitHub</a>
+    <a href="opus55-15-variations-specs.html">Prompts and checks for all 15</a>
+    <a href="https://www.youtube.com/watch?v=dw4rYWy8nLw">Reference video</a>
+  </nav>
+</header>
+<main>
+<ul class="grid">
+  <li class="card">
+    <a class="shot" href="builds/01-eye-lab/index.html"><img src="screenshots/01-eye-lab.jpg" alt="Eye Lab: a 3D eye on an optical bench with focus readouts" loading="lazy" width="640" height="360"></a>
+    <div class="body">
+      <div class="meta"><span class="num">#1</span><span class="tag">Interactive 3D</span></div>
+      <h2><a href="builds/01-eye-lab/index.html">Eye Lab</a></h2>
+      <p class="desc">How the human eye focuses. Drag the ciliary muscle and watch the image on the retina.</p>
+      <p class="credit">Based on Lens Lab by <a href="https://x.com/RyanSael">@RyanSael</a></p>
+      <div class="actions"><a class="btn" href="builds/01-eye-lab/index.html">▶ Open</a></div>
+    </div>
+  </li>
+  <li class="card">
+    <a class="shot" href="builds/02-clawd-goes-to-sea/out/clawd-goes-to-sea.mp4"><img src="screenshots/02-clawd-goes-to-sea.jpg" alt="Clawd Goes to Sea: a scientist on a ship deck with karaoke lyrics" loading="lazy" width="640" height="360"></a>
+    <div class="body">
+      <div class="meta"><span class="num">#2</span><span class="tag">Music video · 150 s</span></div>
+      <h2><a href="builds/02-clawd-goes-to-sea/out/clawd-goes-to-sea.mp4">Clawd Goes to Sea</a></h2>
+      <p class="desc">A music video with a sea shanty that was composed and animated in code.</p>
+      <p class="credit">Based on the Clawd music video by <a href="https://x.com/other__reality">@other__reality</a></p>
+      <div class="actions"><a class="btn" href="builds/02-clawd-goes-to-sea/out/clawd-goes-to-sea.mp4">▶ Watch</a></div>
+    </div>
+  </li>
+  <li class="card">
+    <a class="shot" href="builds/03-water-weather-code/index.html"><img src="screenshots/03-water-weather-code.jpg" alt="Small Weather: a paper boat on water with rain ripples" loading="lazy" width="640" height="360"></a>
+    <div class="body">
+      <div class="meta"><span class="num">#3</span><span class="tag">Film in code</span></div>
+      <h2><a href="builds/03-water-weather-code/index.html">Small Weather</a></h2>
+      <p class="desc">A short film made only in code: six patterns in water and air, for piano and cello.</p>
+      <p class="credit">Based on a short film by <a href="https://x.com/devteamdrew">@devteamdrew</a></p>
+      <div class="actions"><a class="btn" href="builds/03-water-weather-code/index.html">▶ Open</a></div>
+    </div>
+  </li>
+  <li class="card">
+    <a class="shot" href="builds/04-title-sequence/index.html"><img src="screenshots/04-title-sequence.jpg" alt="Meridian: kinetic type over contour lines" loading="lazy" width="640" height="360"></a>
+    <div class="body">
+      <div class="meta"><span class="num">#4</span><span class="tag">Title sequence · 15 s</span></div>
+      <h2><a href="builds/04-title-sequence/index.html">Meridian</a></h2>
+      <p class="desc">A film title sequence from one prompt: kinetic type, contour maps, sound.</p>
+      <p class="credit">Based on a motion showreel by <a href="https://x.com/stephanlivera">@stephanlivera</a></p>
+      <div class="actions"><a class="btn" href="builds/04-title-sequence/index.html">▶ Open</a></div>
+    </div>
+  </li>
+  <li class="card">
+    <a class="shot" href="builds/05-frostbound-monastery/index.html"><img src="screenshots/05-frostbound-monastery.jpg" alt="Frostbound: title screen over a snowy monastery" loading="lazy" width="640" height="360"></a>
+    <div class="body">
+      <div class="meta"><span class="num">#5</span><span class="tag">Game</span></div>
+      <h2><a href="builds/05-frostbound-monastery/index.html">Frostbound Monastery</a></h2>
+      <p class="desc">A soulslike game in a snowbound monastery, with shrines, respawn and a bell tower.</p>
+      <p class="credit">Based on a Dark Souls-style game by <a href="https://x.com/The_Alex">@The_Alex</a></p>
+      <div class="actions"><a class="btn" href="builds/05-frostbound-monastery/index.html">▶ Play</a></div>
+    </div>
+  </li>
+  <li class="card">
+    <a class="shot" href="builds/06-volcano-test/index.html"><img src="screenshots/06-volcano-test.jpg" alt="Volcanic Isle: voxel island with a controls panel" loading="lazy" width="640" height="360"></a>
+    <div class="body">
+      <div class="meta"><span class="num">#6</span><span class="tag">Game</span></div>
+      <h2><a href="builds/06-volcano-test/index.html">The Volcano Test</a></h2>
+      <p class="desc">A voxel sandbox on an active volcano. Pour water on lava and it turns to obsidian.</p>
+      <p class="credit">Based on "The Minecraft Test" by <a href="https://x.com/noahwachnik">@noahwachnik</a></p>
+      <div class="actions"><a class="btn" href="builds/06-volcano-test/index.html">▶ Play</a></div>
+    </div>
+  </li>
+  <li class="card">
+    <a class="shot" href="builds/07-storm-lighthouse/storm_lighthouse_final.mp4"><img src="screenshots/07-storm-lighthouse.jpg" alt="The Keeper's Light: a lighthouse in a storm with lightning" loading="lazy" width="640" height="360"></a>
+    <div class="body">
+      <div class="meta"><span class="num">#7</span><span class="tag">Blender render · 12.5 s</span></div>
+      <h2><a href="builds/07-storm-lighthouse/storm_lighthouse_final.mp4">Storm Lighthouse</a></h2>
+      <p class="desc">A lighthouse in a storm, built procedurally in Blender with no imported assets.</p>
+      <p class="credit">Based on a procedural Blender castle by <a href="https://x.com/Stefan_3D_AI">@Stefan_3D_AI</a></p>
+      <div class="actions"><a class="btn" href="builds/07-storm-lighthouse/storm_lighthouse_final.mp4">▶ Watch</a><a class="btn alt" href="builds/07-storm-lighthouse/build_timelapse.mp4">Build time-lapse</a></div>
+    </div>
+  </li>
+  <li class="card">
+    <a class="shot" href="builds/08-pixel-dragon/index.html"><img src="screenshots/08-pixel-dragon.jpg" alt="Pixel Dragon: a green dragon breathing fire on a castle wall" loading="lazy" width="640" height="360"></a>
+    <div class="body">
+      <div class="meta"><span class="num">#8</span><span class="tag">Pixel art</span></div>
+      <h2><a href="builds/08-pixel-dragon/index.html">Pixel Dragon</a></h2>
+      <p class="desc">Pixel art drawn in pure code, 24 colours: idle, charge and fire breath.</p>
+      <p class="credit">Based on a pixel-art wizard by <a href="https://x.com/majidmanzarpour">@majidmanzarpour</a></p>
+      <div class="actions"><a class="btn" href="builds/08-pixel-dragon/index.html">▶ Open</a></div>
+    </div>
+  </li>
+  <li class="card">
+    <a class="shot" href="builds/09-rosetta-stone/index.html"><img src="screenshots/09-rosetta-stone.jpg" alt="The Stone of Rashid: title over a fort ruin at dusk" loading="lazy" width="640" height="360"></a>
+    <div class="body">
+      <div class="meta"><span class="num">#9</span><span class="tag">Game</span></div>
+      <h2><a href="builds/09-rosetta-stone/index.html">The Stone of Rashid</a></h2>
+      <p class="desc">Dig up the Rosetta Stone as a French soldier in 1799, then solve its three scripts.</p>
+      <p class="credit">Based on an Antikythera mechanism game by <a href="https://x.com/edwinarbus">@edwinarbus</a></p>
+      <div class="actions"><a class="btn" href="builds/09-rosetta-stone/index.html">▶ Play</a></div>
+    </div>
+  </li>
+  <li class="card">
+    <a class="shot" href="builds/10-wave-racer/index.html"><img src="screenshots/10-wave-racer.jpg" alt="Spraywave Rally: jet-ski racer title screen" loading="lazy" width="640" height="360"></a>
+    <div class="body">
+      <div class="meta"><span class="num">#10</span><span class="tag">Game</span></div>
+      <h2><a href="builds/10-wave-racer/index.html">Spraywave Rally</a></h2>
+      <p class="desc">A one-shot jet-ski racer in the style of a late-1990s console game.</p>
+      <p class="credit">Based on a kart racer by <a href="https://x.com/bridgemindai">@bridgemindai</a></p>
+      <div class="actions"><a class="btn" href="builds/10-wave-racer/index.html">▶ Play</a></div>
+    </div>
+  </li>
+  <li class="card">
+    <a class="shot" href="builds/11-arch-bridge/index.html"><img src="screenshots/11-arch-bridge.jpg" alt="Arch Bridge: a stone arch on a desk with a pencil sketch" loading="lazy" width="640" height="360"></a>
+    <div class="body">
+      <div class="meta"><span class="num">#11</span><span class="tag">Interactive 3D</span></div>
+      <h2><a href="builds/11-arch-bridge/index.html">Arch Bridge</a></h2>
+      <p class="desc">A pencil sketch becomes a stone arch bridge with physics. Send a cart across or pull the keystone.</p>
+      <p class="credit">Based on sketch to 3D trebuchet by <a href="https://x.com/poolio">@poolio</a></p>
+      <div class="actions"><a class="btn" href="builds/11-arch-bridge/index.html">▶ Open</a></div>
+    </div>
+  </li>
+  <li class="card">
+    <a class="shot" href="https://github.com/az9713/opus-5.5-builds#12-snow-day-runs-on-your-pc"><img src="screenshots/12-snow-day.jpg" alt="Snow Day: first-person snowblower in front of an alpine hotel" loading="lazy" width="640" height="360"></a>
+    <div class="body">
+      <div class="meta"><span class="num">#12</span><span class="tag">Multiplayer game · local</span></div>
+      <h2><a href="https://github.com/az9713/opus-5.5-builds#12-snow-day-runs-on-your-pc">Snow Day</a></h2>
+      <p class="desc">First-person multiplayer snow clearing. It needs a Node.js server, so it runs on your PC only.</p>
+      <p class="credit">Based on multiplayer lawn mowing by <a href="https://x.com/_MaxBlade">@_MaxBlade</a></p>
+      <div class="actions"><a class="btn alt" href="https://github.com/az9713/opus-5.5-builds#12-snow-day-runs-on-your-pc">How to run it locally</a></div>
+    </div>
+  </li>
+  <li class="card">
+    <a class="shot" href="builds/13-four-seasons-glass/index.html"><img src="screenshots/13-four-seasons-glass.jpg" alt="Four Seasons in Glass: a glass-tile mosaic of a meadow" loading="lazy" width="640" height="360"></a>
+    <div class="body">
+      <div class="meta"><span class="num">#13</span><span class="tag">Mosaic film · 80 s</span></div>
+      <h2><a href="builds/13-four-seasons-glass/index.html">Four Seasons in Glass</a></h2>
+      <p class="desc">A glass-tile mosaic film of one meadow, from spring into winter.</p>
+      <p class="credit">Based on a glass-tile mosaic film by <a href="https://x.com/LCSlates">@LCSlates</a></p>
+      <div class="actions"><a class="btn" href="builds/13-four-seasons-glass/index.html">▶ Open</a></div>
+    </div>
+  </li>
+  <li class="card">
+    <a class="shot" href="builds/14-japan-rail-sketchbook/index.html"><img src="screenshots/14-japan-rail-sketchbook.jpg" alt="A Japan Rail Sketchbook: Tokyo Station in marker style" loading="lazy" width="640" height="360"></a>
+    <div class="body">
+      <div class="meta"><span class="num">#14</span><span class="tag">Sketchbook</span></div>
+      <h2><a href="builds/14-japan-rail-sketchbook/index.html">A Japan Rail Sketchbook</a></h2>
+      <p class="desc">A rail trip across Japan, drawn in acrylic marker. Turn the pages with a page curl.</p>
+      <p class="credit">Based on a New Zealand trip in markers by <a href="https://x.com/ann_nnng">@ann_nnng</a></p>
+      <div class="actions"><a class="btn" href="builds/14-japan-rail-sketchbook/index.html">▶ Open</a></div>
+    </div>
+  </li>
+  <li class="card">
+    <a class="shot" href="builds/15-silk-road-sand/index.html"><img src="screenshots/15-silk-road-sand.jpg" alt="Silk Road in Sand: camels crossing dunes, 400 CE" loading="lazy" width="640" height="360"></a>
+    <div class="body">
+      <div class="meta"><span class="num">#15</span><span class="tag">Sand-art film · 120 s</span></div>
+      <h2><a href="builds/15-silk-road-sand/index.html">Silk Road in Sand</a></h2>
+      <p class="desc">A sand-art film of the Silk Road, 130 BCE to 1453 CE, with music made in the browser.</p>
+      <p class="credit">Based on a sand-art film of US history by <a href="https://x.com/Michaelzsguo">@Michaelzsguo</a></p>
+      <div class="actions"><a class="btn" href="builds/15-silk-road-sand/index.html">▶ Open</a></div>
+    </div>
+  </li>
+</ul>
+</main>
+<footer>
+  Every original build belongs to its creator. The builds here were made with Claude Opus 5.5 in Claude Code.
+</footer>
+</body>
+</html>
