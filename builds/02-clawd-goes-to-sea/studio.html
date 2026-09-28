@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Clawd Goes to Sea</title>
+<meta name="viewport" content="width=1280">
+<style>
+  html, body { margin: 0; padding: 0; background: #0f172a; overflow: hidden; }
+  #stage { position: relative; width: 1280px; height: 720px; overflow: hidden; }
+  #stage canvas { display: block; }
+  .paper, .vignette, .flash, .layer { position: absolute; inset: 0; pointer-events: none; }
+  .paper { mix-blend-mode: multiply; opacity: 0.85; }
+  .vignette { background: radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0) 60%, rgba(40,20,5,0.28) 100%); }
+  .flash { background: #fffdf2; opacity: 0; }
+  .sfx { position: absolute; font-family: Impact, 'Arial Black', sans-serif; letter-spacing: 2px; white-space: nowrap;
+         -webkit-text-stroke: 7px #1d130c; paint-order: stroke fill; text-shadow: 7px 8px 0 #1d130c; line-height: 1; }
+  .label { position: absolute; white-space: nowrap; line-height: 1; font-weight: 700; }
+  .label.comic { font-family: 'Comic Sans MS', 'Segoe Print', cursive; }
+  .label.bold { font-family: Impact, 'Arial Black', sans-serif; letter-spacing: 1px; }
+  .label.serif { font-family: Georgia, 'Times New Roman', serif; font-style: italic; }
+  .cap { position: absolute; left: 0; right: 0; bottom: 0; height: 92px; background: rgba(9, 11, 20, 0.84);
+         border-top: 3px solid #1d130c; display: flex; align-items: center; justify-content: center; }
+  .capline { font-family: 'Trebuchet MS', 'Segoe UI', sans-serif; font-weight: 700; font-size: 38px; color: #f1efe8;
+             letter-spacing: 0.5px; text-shadow: 2px 2px 0 #000; white-space: nowrap; }
+  .capline span { display: inline-block; margin: 0 9px; }
+  .capline span.sung { color: #ffd83d; }
+  .capline span.cur { color: #ffd83d; transform: scale(1.06) translateY(-2px); text-shadow: 0 0 14px rgba(255,216,61,0.55), 2px 2px 0 #000; }
+  .cap.dim .capline { color: #8b93a7; font-style: italic; font-size: 30px; }
+  #ui { display: none; gap: 10px; align-items: center; padding: 8px 12px; width: 1256px; background: #1e293b; color: #e2e8f0;
+        font: 14px 'Segoe UI', sans-serif; }
+  #ui button { background: #fb923c; color: #0f172a; border: 0; padding: 6px 14px; font-weight: 700; cursor: pointer; }
+  #ui input { flex: 1; accent-color: #2dd4bf; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="ui"><button id="play">Play</button><input id="scrub" type="range" min="0" max="150" step="0.01" value="0"><span id="time">0.0s</span></div>
+<audio id="audio" preload="none"></audio>
+
+<script src="node_modules/p5/lib/p5.min.js"></script>
+<script src="node_modules/p5.brush/dist/p5.brush.js"></script>
+<script src="assets/timing.js"></script>
+<script src="lib.js"></script>
+<script src="scenes/part1.js"></script>
+<script src="scenes/part2.js"></script>
+<script src="scenes/part3.js"></script>
+<script src="scenes/part4.js"></script>
+<script src="scenes/part5.js"></script>
+<script src="scenes/part6.js"></script>
+<script src="scenes/part7.js"></script>
+<script src="studio.js"></script>
+</body>
+</html>

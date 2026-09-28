@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A Japan Rail Sketchbook</title>
+<style>
+  :root{
+    --paper:#f3ecd8;
+    --cover-1:#4a2e1c;
+    --cover-2:#2f1c10;
+    --ink:#2a2a4a;
+  }
+  html,body{margin:0;height:100%;background:#161210;font-family:Georgia,'Times New Roman',serif;}
+  *{box-sizing:border-box;}
+  .stage{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:22px;}
+  h1.title{color:#d8c8a0;font-weight:400;letter-spacing:3px;margin:0;font-size:20px;text-transform:uppercase;text-align:center;}
+  .book-cover{
+    position:relative;
+    width:min(94vw,1180px);
+    aspect-ratio:1600/1060;
+    background:linear-gradient(180deg,var(--cover-1),var(--cover-2));
+    border-radius:12px;
+    box-shadow:0 30px 70px rgba(0,0,0,.6), 0 0 0 2px #1c1108 inset, 0 0 0 8px #22140b inset;
+    padding:22px;
+  }
+  .book{
+    position:relative;
+    width:100%;height:100%;
+    border-radius:4px;
+    overflow:hidden;
+    background:#1c1712;
+    box-shadow:inset 0 0 24px rgba(0,0,0,.5);
+    cursor:grab;
+    touch-action:none;
+  }
+  .book.dragging{cursor:grabbing;}
+  .book canvas{width:100%;height:100%;display:block;}
+  .hint{color:#a79b84;font-size:13px;letter-spacing:.4px;}
+  .veil{
+    position:absolute;inset:0;background:#161210;color:#cbb98e;
+    display:flex;align-items:center;justify-content:center;font-size:15px;letter-spacing:1px;
+    z-index:99;transition:opacity .5s ease;
+  }
+  .veil.hidden{opacity:0;pointer-events:none;}
+  .navbtn{
+    position:absolute;top:50%;transform:translateY(-50%);
+    width:44px;height:44px;border-radius:50%;border:none;
+    background:rgba(0,0,0,.35);color:#e8dcc0;font-size:20px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;z-index:60;
+  }
+  .navbtn:hover{background:rgba(0,0,0,.55);}
+  .navbtn.prev{left:10px;}
+  .navbtn.next{right:10px;}
+</style>
+</head>
+<body>
+<div class="stage">
+  <h1 class="title">A Japan Rail Sketchbook</h1>
+  <div class="book-cover">
+    <div class="book" id="book">
+      <canvas id="stage-canvas" width="1600" height="1000"></canvas>
+      <button class="navbtn prev" id="btnPrev" aria-label="previous page">&#10094;</button>
+      <button class="navbtn next" id="btnNext" aria-label="next page">&#10095;</button>
+      <div class="veil" id="veil">Mixing the paint&hellip;</div>
+    </div>
+  </div>
+  <div class="hint">Drag the page, or use the arrow keys, to turn it.</div>
+</div>
+
+<script>
+/* =========================================================================
+   DATA — injected by build.js. Each entry: {id, file, dataUri}
+   ========================================================================= */
+const PHOTOS_RAW = /*__PHOTOS__*/[]/*__END_PHOTOS__*/;
+
+/* Order the spreads as a travel narrative rather than alphabetically. */
+const ORDER = [
+  'tokyo-station','shinkansen-platform','mount-fuji','kanazawa-station',
+  'fushimi-inari','arashiyama-bamboo','nara-park','himeji-castle',
+  'hiroshima-tram','hokkaido-snow-line'
+];
+const PHOTOS = ORDER.map((id,i)=>{
+  const p = PHOTOS_RAW.find(x=>x.id===id);
+  if(!p) throw new Error('missing photo data for '+id);
+  return Object.assign({order:i}, p);
+});
+
+/* =========================================================================
+   SMALL MATH / COLOR UTILITIES
+   ========================================================================= */
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+
+function rgbToHsl(r,g,b){
+  r/=255; g/=255; b/=255;
+  const max=Math.max(r,g,b), min=Math.min(r,g,b);
+  let h=0,s=0; const l=(max+min)/2;
+  const d=max-min;
+  if(d!==0){
+    s = l>0.5 ? d/(2-max-min) : d/(max+min);
+    switch(max){
+      case r: h=(g-b)/d + (g<b?6:0); break;
+      case g: h=(b-r)/d + 2; break;
+      case b: h=(r-g)/d + 4; break;
+    }
+    h*=60;
+  }
+  return {h,s,l};
+}
+function hue2rgb(p,q,t){
+  if(t<0) t+=1; if(t>1) t-=1;
+  if(t<1/6) return p+(q-p)*6*t;
+  if(t<1/2) return q;
+  if(t<2/3) return p+(q-p)*(2/3-t)*6;
+  return p;
+}
+function hslToRgb(h,s,l){
+  h = ((h%360)+360)%360 / 360;
+  let r,g,b;
+  if(s===0){ r=g=b=l; }
+  else{
+    const q = l<0.5 ? l*(1+s) : l+s-l*s;
+    const p = 2*l-q;
+    r = hue2rgb(p,q,h+1/3);
+    g = hue2rgb(p,q,h);
+    b = hue2rgb(p,q,h-1/3);
+  }
+  return [Math.round(r*255), Math.round(g*255), Math.round(b*255)];
+}
+/* Push a source colour toward the bright, opaque marker/acrylic range.
+   The saturation boost is tapered near the two lightness extremes so true
+   blacks (hair, shadow) stay neutral dark instead of drifting into a
+   nearby hue, and near-whites (snow, cloud) stay pale instead of tinting. */
+function boostColor(r,g,b){
+  const {h,s,l} = rgbToHsl(r,g,b);
+  const taper = clamp(1 - Math.abs(l-0.5)*1.5, 0.18, 1);
+  const s2 = clamp(s*(1+1.2*taper) + 0.06*taper, 0, 0.92);
+  const l2 = clamp(l*1.05+0.05, 0.10, 0.92);
+  return hslToRgb(h,s2,l2);
+}
+
+/* =========================================================================
+   PIXEL PIPELINE — turns a photo into a flat, bright, marker-style tile.
+   Steps: crop to spread aspect -> downsample -> light blur -> k-means
+   quantize -> majority-filter the label map -> boost colours -> ink edges
+   (Sobel + label-boundary) -> directed short marker strokes on foliage-hued
+   regions. Runs once per photo at load time, from pixels already decoded
+   into an <img> built from a data: URI, so canvas never taints.
+   ========================================================================= */
+function buildIllustration(img, opts){
+  opts = opts || {};
+  const K = opts.k || 11;
+  const WS = 400, HS = 250; // working resolution, exactly 4x below spread draw size
+  const targetAspect = WS/HS; // 1.6, matches the spread
+
+  // 1. Crop the source (assume ~4:3) to the spread aspect, centred.
+  const sw = img.naturalWidth || img.width, sh = img.naturalHeight || img.height;
+  let cw = sw, ch = Math.round(sw/targetAspect);
+  if(ch > sh){ ch = sh; cw = Math.round(sh*targetAspect); }
+  const cx = Math.round((sw-cw)/2), cy = Math.round((sh-ch)/2);
+
+  // 2. Downsample (the resize itself blurs/anti-aliases the source).
+  const work = document.createElement('canvas'); work.width=WS; work.height=HS;
+  const wctx = work.getContext('2d', {willReadFrequently:true});
+  wctx.imageSmoothingEnabled = true;
+  wctx.imageSmoothingQuality = 'high';
+  wctx.drawImage(img, cx,cy,cw,ch, 0,0,WS,HS);
+  const srcData = wctx.getImageData(0,0,WS,HS);
+  const px = srcData.data;
+  const n = WS*HS;
+
+  // 3. Small 3x3 box blur pass to settle noise before clustering.
+  const blurred = new Uint8ClampedArray(px.length);
+  for(let y=0;y<HS;y++){
+    for(let x=0;x<WS;x++){
+      let rs=0,gs=0,bs=0,c=0;
+      for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+        const xx=x+dx, yy=y+dy;
+        if(xx<0||yy<0||xx>=WS||yy>=HS) continue;
+        const i=(yy*WS+xx)*4;
+        rs+=px[i]; gs+=px[i+1]; bs+=px[i+2]; c++;
+      }
+      const o=(y*WS+x)*4;
+      blurred[o]=rs/c; blurred[o+1]=gs/c; blurred[o+2]=bs/c; blurred[o+3]=255;
+    }
+  }
+
+  // 4. Luminance array (for Sobel edges) from the blurred pixels.
+  const lum = new Float32Array(n);
+  for(let i=0;i<n;i++){
+    const o=i*4;
+    lum[i] = 0.299*blurred[o] + 0.587*blurred[o+1] + 0.114*blurred[o+2];
+  }
+  const gx = new Float32Array(n), gy = new Float32Array(n), mag = new Float32Array(n);
+  for(let y=1;y<HS-1;y++){
+    for(let x=1;x<WS-1;x++){
+      const i=y*WS+x;
+      const tl=lum[i-WS-1], t=lum[i-WS], tr=lum[i-WS+1];
+      const l=lum[i-1], r=lum[i+1];
+      const bl=lum[i+WS-1], b=lum[i+WS], br=lum[i+WS+1];
+      const sx=(tr+2*r+br)-(tl+2*l+bl);
+      const sy=(bl+2*b+br)-(tl+2*t+tr);
+      gx[i]=sx; gy[i]=sy; mag[i]=Math.sqrt(sx*sx+sy*sy);
+    }
+  }
+  let magSum=0; for(let i=0;i<n;i++) magSum+=mag[i];
+  const magMean = magSum/n;
+
+  // 5. K-means colour quantization. Seeds are chosen k-means++ style (each
+  //    new seed weighted by its squared distance from the closest existing
+  //    seed) so a small but visually distinct region — a saturated green
+  //    tram against a brown street — reliably gets its own cluster instead
+  //    of being swallowed by the majority colour.
+  const seedRng = mulberry32((opts.seed||1)*7 + 3);
+  const seedIdx = [Math.floor(seedRng()*n)];
+  const d2 = new Float64Array(n).fill(Infinity);
+  for(let c=1;c<K;c++){
+    const lastIdx = seedIdx[c-1];
+    const lr=blurred[lastIdx*4], lgc=blurred[lastIdx*4+1], lb=blurred[lastIdx*4+2];
+    let sum=0;
+    for(let i=0;i<n;i++){
+      const dr=blurred[i*4]-lr, dg=blurred[i*4+1]-lgc, db=blurred[i*4+2]-lb;
+      const d=dr*dr+dg*dg+db*db;
+      if(d<d2[i]) d2[i]=d;
+      sum+=d2[i];
+    }
+    let r=seedRng()*sum, acc=0, chosen=n-1;
+    for(let i=0;i<n;i++){ acc+=d2[i]; if(acc>=r){ chosen=i; break; } }
+    seedIdx.push(chosen);
+  }
+  let centers = seedIdx.map(i=>[blurred[i*4],blurred[i*4+1],blurred[i*4+2]]);
+  let labels = new Int32Array(n);
+  const iters = opts.iters || 7;
+  for(let iter=0; iter<iters; iter++){
+    for(let i=0;i<n;i++){
+      const o=i*4, r=blurred[o],g=blurred[o+1],b=blurred[o+2];
+      let best=0,bestD=Infinity;
+      for(let c=0;c<K;c++){
+        const dr=r-centers[c][0], dg=g-centers[c][1], db=b-centers[c][2];
+        const d=dr*dr+dg*dg+db*db;
+        if(d<bestD){bestD=d;best=c;}
+      }
+      labels[i]=best;
+    }
+    const sums = Array.from({length:K},()=>[0,0,0,0]);
+    for(let i=0;i<n;i++){
+      const o=i*4, c=labels[i], s=sums[c];
+      s[0]+=blurred[o]; s[1]+=blurred[o+1]; s[2]+=blurred[o+2]; s[3]++;
+    }
+    for(let c=0;c<K;c++) if(sums[c][3]>0) centers[c]=[sums[c][0]/sums[c][3], sums[c][1]/sums[c][3], sums[c][2]/sums[c][3]];
+  }
+
+  // 6. Majority-vote filter on the label map to erase speckle.
+  function smoothLabels(lab){
+    const out = new Int32Array(n);
+    for(let y=0;y<HS;y++) for(let x=0;x<WS;x++){
+      const counts = {};
+      for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+        const xx=x+dx, yy=y+dy;
+        if(xx<0||yy<0||xx>=WS||yy>=HS) continue;
+        const l = lab[yy*WS+xx];
+        counts[l] = (counts[l]||0)+1;
+      }
+      let bl=lab[y*WS+x], bc=-1;
+      for(const k in counts){ if(counts[k]>bc){bc=counts[k]; bl=+k;} }
+      out[y*WS+x]=bl;
+    }
+    return out;
+  }
+  const smoothPasses = opts.smoothPasses===undefined ? 3 : opts.smoothPasses;
+  for(let p=0;p<smoothPasses;p++) labels = smoothLabels(labels);
+
+  // 7. Boost each cluster centre to a bright, opaque marker colour.
+  const boosted = centers.map(c=>boostColor(c[0],c[1],c[2]));
+  const hsls = centers.map(c=>rgbToHsl(c[0],c[1],c[2]));
+  // Foliage: true greens only (grass, leaves, bamboo). Floral: pale/white
+  // blossoms or clearly pink petals — NOT brick, wood, skin or torii-orange,
+  // which all sit in the low hue band this used to catch.
+  const isFoliage = hsls.map(h => h.h>=72 && h.h<=170 && h.s>0.12);
+  const isFloral  = hsls.map(h => (h.l>0.80 && h.s<0.40) || (h.h>=320 && h.h<=350 && h.s>0.18 && h.l>0.45 && h.l<0.86));
+
+  // 8. Flat colour fill from the label map.
+  const colorImg = wctx.createImageData(WS,HS);
+  for(let i=0;i<n;i++){
+    const c = boosted[labels[i]];
+    const o=i*4;
+    colorImg.data[o]=c[0]; colorImg.data[o+1]=c[1]; colorImg.data[o+2]=c[2]; colorImg.data[o+3]=255;
+  }
+  const colorCanvas = document.createElement('canvas'); colorCanvas.width=WS; colorCanvas.height=HS;
+  colorCanvas.getContext('2d').putImageData(colorImg,0,0);
+
+  // 9. Ink line overlay: Sobel edges above an adaptive threshold, plus every
+  //    label-boundary pixel (keeps people/object silhouettes crisp). Kept
+  //    deliberately sparing so flat fields (snow, sky) stay flat, not linework.
+  const inkImg = wctx.createImageData(WS,HS);
+  const threshold = magMean*1.7 + 20;
+  for(let y=0;y<HS;y++){
+    for(let x=0;x<WS;x++){
+      const i=y*WS+x, o=i*4;
+      let boundary=false;
+      if(x<WS-1 && labels[i]!==labels[i+1]) boundary=true;
+      if(!boundary && y<HS-1 && labels[i]!==labels[i+WS]) boundary=true;
+      const strong = mag[i] > threshold;
+      if(boundary || strong){
+        const a = boundary ? 130 : clamp(Math.round((mag[i]-threshold)*3+90),0,170);
+        inkImg.data[o]=30; inkImg.data[o+1]=32; inkImg.data[o+2]=56; inkImg.data[o+3]=a;
+      }
+    }
+  }
+  const inkCanvas = document.createElement('canvas'); inkCanvas.width=WS; inkCanvas.height=HS;
+  inkCanvas.getContext('2d').putImageData(inkImg,0,0);
+
+  // 10. Compose colour + ink at working resolution. This composed tile is
+  //     later drawn at 4x with smoothing OFF, so its crisp hard edges read
+  //     as opaque flat marker fills rather than blended/blurred paint.
+  const composed = document.createElement('canvas'); composed.width=WS; composed.height=HS;
+  const cctx = composed.getContext('2d');
+  cctx.drawImage(colorCanvas,0,0);
+  cctx.globalAlpha = 0.42;
+  cctx.globalCompositeOperation = 'multiply';
+  cctx.drawImage(inkCanvas,0,0);
+  cctx.globalAlpha = 1;
+  cctx.globalCompositeOperation = 'source-over';
+
+  return { composed, WS, HS, labels, gx, gy, isFoliage, isFloral, boosted };
+}
+
+/* Short, directed marker strokes over grass / tree / flower regions, drawn
+   straight onto the destination (already at full spread resolution) so
+   they stay crisp instead of being drawn small and blown up 4x with the
+   rest of the tile. Direction follows the local Sobel gradient's tangent,
+   so strokes read as if laid along the structure of the leaves/petals/blades. */
+function drawMarkerStrokes(ctx, data, destX, destY, destW, destH, seed){
+  const { WS, HS, labels, gx, gy, isFoliage, isFloral, boosted } = data;
+  const scaleX = destW/WS, scaleY = destH/HS;
+  const rng = mulberry32(seed || 1);
+  const cell = 2; // sample every 2nd working pixel
+  ctx.save();
+  for(let y=1;y<HS-1;y+=cell){
+    for(let x=1;x<WS-1;x+=cell){
+      const i=y*WS+x;
+      const lab = labels[i];
+      const foliage = isFoliage[lab], floral = isFloral[lab];
+      if(!foliage && !floral) continue;
+      const chance = foliage ? 0.34 : 0.24;
+      if(rng() > chance) continue;
+      const tangent = Math.atan2(gx[i], -gy[i]); // perpendicular to the gradient
+      const jitter = (rng()-0.5) * (foliage ? 1.1 : 2.2);
+      const angle = tangent + jitter;
+      const len = foliage ? (12+rng()*20) : (6+rng()*10); // final on-screen px
+      const wid = foliage ? (2.6+rng()*2.4) : (2.4+rng()*2.2);
+      const [br,bg,bb] = boosted[lab];
+      const hsl0 = rgbToHsl(br,bg,bb);
+      const lshift = (rng()-0.5)*0.18;
+      const strokeCol = hslToRgb(hsl0.h, clamp(hsl0.s+(rng()-0.5)*0.15,0,1), clamp(hsl0.l+lshift,0.10,0.92));
+      const px = destX + x*scaleX, py = destY + y*scaleY;
+      const dx = Math.cos(angle)*len/2, dy = Math.sin(angle)*len/2;
+      ctx.strokeStyle = `rgb(${strokeCol[0]},${strokeCol[1]},${strokeCol[2]})`;
+      ctx.lineWidth = wid;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(px-dx,py-dy);
+      ctx.lineTo(px+dx,py+dy);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+/* =========================================================================
+   SPREAD CANVAS — one two-page illustration, corner photo print & caption.
+   ========================================================================= */
+function buildPaperBack(W,H){
+  const c = document.createElement('canvas'); c.width=W; c.height=H;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#efe6cd'; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle = 'rgba(90,74,46,.10)';
+  ctx.lineWidth = 1;
+  for(let y=30;y<H;y+=26){ ctx.beginPath(); ctx.moveTo(24,y); ctx.lineTo(W-24,y); ctx.stroke(); }
+  const grad = ctx.createRadialGradient(W/2,H/2,H*0.1,W/2,H/2,W*0.7);
+  grad.addColorStop(0,'rgba(0,0,0,0)'); grad.addColorStop(1,'rgba(0,0,0,.10)');
+  ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
+  return c;
+}
+
+function drawCornerPrint(ctx, img, W, H){
+  const bw = 236, bh = 190;
+  const x = W - bw - 46, y = H - bh - 40;
+  ctx.save();
+  ctx.translate(x+bw/2, y+bh/2);
+  ctx.rotate(-3*Math.PI/180);
+  ctx.translate(-bw/2,-bh/2);
+  ctx.shadowColor = 'rgba(0,0,0,.45)';
+  ctx.shadowBlur = 18;
+  ctx.shadowOffsetY = 8;
+  ctx.fillStyle = '#fbfaf5';
+  ctx.fillRect(0,0,bw,bh);
+  ctx.shadowColor = 'transparent';
+  const pad = 10, picH = bh-pad-30;
+  const sw = img.naturalWidth||img.width, sh = img.naturalHeight||img.height;
+  const targetA = (bw-pad*2)/picH;
+  let cw=sw, ch=Math.round(sw/targetA);
+  if(ch>sh){ ch=sh; cw=Math.round(sh*targetA); }
+  const cx=(sw-cw)/2, cy=(sh-ch)/2;
+  ctx.drawImage(img, cx,cy,cw,ch, pad,pad,bw-pad*2,picH);
+  ctx.strokeStyle='rgba(0,0,0,.25)'; ctx.lineWidth=1; ctx.strokeRect(pad,pad,bw-pad*2,picH);
+  // a little tape corner
+  ctx.save();
+  ctx.translate(bw*0.18, 2);
+  ctx.rotate(-18*Math.PI/180);
+  ctx.fillStyle = 'rgba(230,222,190,.75)';
+  ctx.fillRect(-20,-6,40,16);
+  ctx.restore();
+  ctx.restore();
+}
+
+function drawCaption(ctx, filename, W, H){
+  ctx.save();
+  ctx.translate(60, H-46);
+  ctx.rotate(-1.4*Math.PI/180);
+  ctx.font = '30px "Segoe Print","Bradley Hand","Segoe Script","Comic Sans MS",cursive';
+  ctx.textBaseline = 'alphabetic';
+  // A soft paper-tag backdrop keeps the handwriting legible no matter what
+  // colour the illustration underneath happens to be (e.g. a dark window).
+  const tagW = ctx.measureText(filename).width;
+  ctx.fillStyle = 'rgba(247,241,222,.82)';
+  ctx.beginPath();
+  ctx.roundRect(-16,-30, tagW+34, 54, 8);
+  ctx.fill();
+  ctx.fillStyle = '#242a4a';
+  ctx.fillText(filename, 0, 0);
+  ctx.strokeStyle = 'rgba(36,42,74,.35)';
+  ctx.lineWidth = 1.4;
+  const w = tagW;
+  ctx.beginPath();
+  ctx.moveTo(-4, 10);
+  ctx.bezierCurveTo(w*0.3,15, w*0.7,7, w+6,12);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function buildSpreadCanvas(photo, img){
+  const W=1600, H=1000;
+  const canvas = document.createElement('canvas'); canvas.width=W; canvas.height=H;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#f3ecd8';
+  ctx.fillRect(0,0,W,H);
+
+  const seed = photo.order*97+13;
+  // arashiyama-bamboo has one small, distant walking figure. At the default
+  // 3 majority-filter passes it is only a few working-pixels across and
+  // gets smoothed away entirely; one pass keeps it readable against the path.
+  const TUNING = { 'arashiyama-bamboo': {smoothPasses:1} };
+  const art = buildIllustration(img, Object.assign({seed}, TUNING[photo.id]||{}));
+  const destX=18, destY=18, destW=W-36, destH=H-36;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(art.composed, 0,0,art.WS,art.HS, destX,destY,destW,destH);
+  ctx.imageSmoothingEnabled = true;
+  drawMarkerStrokes(ctx, art, destX, destY, destW, destH, seed);
+
+  ctx.strokeStyle = 'rgba(30,24,16,.35)';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(18,18,W-36,H-36);
+
+  const spine = ctx.createLinearGradient(W/2-42,0,W/2+42,0);
+  spine.addColorStop(0,'rgba(0,0,0,0)');
+  spine.addColorStop(0.5,'rgba(0,0,0,.32)');
+  spine.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle = spine;
+  ctx.fillRect(W/2-42,0,84,H);
+
+  drawCornerPrint(ctx, img, W, H);
+  drawCaption(ctx, photo.file, W, H);
+
+  ctx.font = '16px Georgia, serif';
+  ctx.fillStyle = '#8a7f66';
+  ctx.textAlign = 'center';
+  ctx.fillText((photo.order+1)+' / '+PHOTOS.length, W/2, H-16);
+  ctx.textAlign = 'left';
+
+  return canvas;
+}
+
+/* =========================================================================
+   PAGE-CURL RENDERER — a real cylinder curl over the canvas, not a flip.
+   ========================================================================= */
+function renderCurl(ctx, W, H, spreads, paperBack, current, dir, progress){
+  ctx.clearRect(0,0,W,H);
+  if(!dir || progress<=0){
+    ctx.drawImage(spreads[current],0,0);
+    return;
+  }
+  const target = current + dir;
+  ctx.drawImage(spreads[target],0,0);
+
+  const r = 0.16*W;
+  const x0 = W*(1-1.35*progress);
+  const step = 5;
+
+  let crestScreenX = null;
+
+  for(let sx=0; sx<W; sx+=step){
+    const localSx = (dir===1) ? sx : (W-sx);
+    const d = localSx - x0;
+    let mode, screenXLocal, shade;
+    if(d<=0){
+      mode='front-flat'; screenXLocal=localSx; shade=1;
+    } else {
+      const theta = d/r;
+      if(theta<=Math.PI/2){
+        mode='front-curl'; screenXLocal = x0 + r*Math.sin(theta); shade = 0.5+0.5*Math.cos(theta);
+      } else if(theta<=Math.PI){
+        mode='back-curl'; screenXLocal = x0 + r*Math.sin(theta); shade = 0.45+0.45*Math.abs(Math.sin(theta));
+      } else {
+        mode='back-flat'; screenXLocal = x0 - (d-Math.PI*r); shade = 0.58;
+      }
+    }
+    const screenX = (dir===1) ? screenXLocal : (W-screenXLocal);
+    if(screenX < -step || screenX > W+step) continue;
+    if(crestScreenX===null && mode!=='front-flat'){
+      crestScreenX = (dir===1) ? (x0+r) : (W-(x0+r));
+    }
+
+    const srcCanvas = (mode==='front-flat'||mode==='front-curl') ? spreads[current] : paperBack;
+    ctx.drawImage(srcCanvas, sx,0,step,H, screenX,0,step+1,H);
+    if(shade<1){
+      ctx.fillStyle = `rgba(0,0,0,${(1-shade)*0.6})`;
+      ctx.fillRect(screenX,0,step+1,H);
+    }
+  }
+
+  if(crestScreenX!==null){
+    const g = ctx.createLinearGradient(crestScreenX-48,0,crestScreenX+48,0);
+    g.addColorStop(0,'rgba(0,0,0,0)');
+    g.addColorStop(0.5,'rgba(0,0,0,.30)');
+    g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(crestScreenX-48,0,96,H);
+  }
+}
+
+/* =========================================================================
+   BOOK STATE + INTERACTION (drag and arrow keys)
+   ========================================================================= */
+function loadImage(src){
+  return new Promise((res,rej)=>{
+    const im = new Image();
+    im.onload = ()=>res(im);
+    im.onerror = rej;
+    im.src = src;
+  });
+}
+
+(async function boot(){
+  const canvas = document.getElementById('stage-canvas');
+  const ctx = canvas.getContext('2d');
+  const book = document.getElementById('book');
+  const veil = document.getElementById('veil');
+  const btnPrev = document.getElementById('btnPrev');
+  const btnNext = document.getElementById('btnNext');
+  const W=1600, H=1000, N=PHOTOS.length;
+
+  const imgs = await Promise.all(PHOTOS.map(p=>loadImage(p.dataUri)));
+  const spreads = PHOTOS.map((p,i)=>buildSpreadCanvas(p, imgs[i]));
+  const paperBack = buildPaperBack(W,H);
+
+  let current = 0;
+  let animating = false;
+  let dragging = false;
+  let dragDir = 0;
+  let dragStartX = 0;
+  let lastProgress = 0;
+
+  window.__state = { get current(){ return current; }, N };
+
+  function draw(dir, progress){
+    renderCurl(ctx, W, H, spreads, paperBack, current, dir, progress);
+  }
+  draw(0,0);
+
+  veil.classList.add('hidden');
+  window.__ready = true;
+
+  function animateTo(dir, from, to, ms, onDone){
+    animating = true;
+    const t0 = performance.now();
+    function step(now){
+      const p = clamp((now-t0)/ms, 0, 1);
+      const eased = 1-Math.pow(1-p, 3);
+      const val = from + (to-from)*eased;
+      draw(dir, val);
+      if(p<1){ requestAnimationFrame(step); }
+      else { animating=false; if(onDone) onDone(); }
+    }
+    requestAnimationFrame(step);
+  }
+
+  function goTo(dir){
+    if(animating) return;
+    const target = current+dir;
+    if(target<0||target>=N) return;
+    animateTo(dir, 0, 1, 620, ()=>{
+      current = target;
+      draw(0,0);
+    });
+  }
+
+  btnPrev.addEventListener('click', ()=>goTo(-1));
+  btnNext.addEventListener('click', ()=>goTo(1));
+
+  window.addEventListener('keydown', (e)=>{
+    if(e.key==='ArrowRight'){ e.preventDefault(); goTo(1); }
+    else if(e.key==='ArrowLeft'){ e.preventDefault(); goTo(-1); }
+  });
+
+  book.addEventListener('pointerdown', (e)=>{
+    if(animating) return;
+    dragging = true; dragDir = 0; dragStartX = e.clientX; lastProgress = 0;
+    book.classList.add('dragging');
+    book.setPointerCapture(e.pointerId);
+  });
+  book.addEventListener('pointermove', (e)=>{
+    if(!dragging) return;
+    const dx = e.clientX - dragStartX;
+    if(dragDir===0){
+      if(Math.abs(dx) < 6) return;
+      const dir = dx<0 ? 1 : -1;
+      const target = current+dir;
+      if(target<0||target>=N) return;
+      dragDir = dir;
+    }
+    const bw = book.getBoundingClientRect().width || W;
+    const progress = clamp(Math.abs(dx)/(bw*0.75), 0, 1);
+    lastProgress = progress;
+    draw(dragDir, progress);
+  });
+  function endDrag(){
+    if(!dragging) return;
+    dragging = false;
+    book.classList.remove('dragging');
+    if(dragDir===0) return;
+    const dir = dragDir, from = lastProgress;
+    if(from > 0.32){
+      animateTo(dir, from, 1, 320, ()=>{ current = current+dir; draw(0,0); });
+    } else {
+      animateTo(dir, from, 0, 260, ()=>{ draw(0,0); });
+    }
+  }
+  book.addEventListener('pointerup', endDrag);
+  book.addEventListener('pointercancel', endDrag);
+})();
+</script>
+</body>
+</html>

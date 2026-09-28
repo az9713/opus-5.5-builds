@@ -1,0 +1,24 @@
+{
+  "holdMaxDisp": 0.004349624741412886,
+  "collapseState": {
+    "stage": "stone",
+    "maxRingDisplacement": 4.539478674543563,
+    "keystoneRemoved": true,
+    "cartX": -3.100532136544883,
+    "deckY": 5.624987123046488
+  },
+  "lowFrictionState": {
+    "stage": "stone",
+    "maxRingDisplacement": 29.107291628267372,
+    "keystoneRemoved": false,
+    "cartX": -2.2199795071759714,
+    "deckY": 1.8468396663015976
+  },
+  "riseState": {
+    "stage": "stone",
+    "maxRingDisplacement": 0.003575960531733168,
+    "keystoneRemoved": false,
+    "cartX": -2.19999545778109,
+    "deckY": 4.7249907162997395
+  }
+}

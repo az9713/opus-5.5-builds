@@ -1,0 +1,21 @@
+# Local working files (not part of the builds)
+scratchpad/
+.ignore/
+.impeccable/
+Top 15 Things built with Claude OPUS 5.5 - YouTube*
+HANDOFF.md
+transcript.txt
+
+# Dependencies (npm install restores them)
+node_modules/
+
+# Large or regenerable build output
+builds/02-clawd-goes-to-sea/frames/
+builds/02-clawd-goes-to-sea/dev/frames_test/
+builds/02-clawd-goes-to-sea/dev/out/
+builds/02-clawd-goes-to-sea/assets/shanty.wav
+builds/02-clawd-goes-to-sea/out/clawd-goes-to-sea_full.mp4
+builds/07-storm-lighthouse/frames/
+builds/07-storm-lighthouse/blendcache_storm_lighthouse/
+*.blend
+*.blend1

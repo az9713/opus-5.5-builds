@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snow Day &mdash; Alpine Plow</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "/vendor/three/build/three.module.js",
+    "three/addons/": "/vendor/three/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+  <div id="join-screen">
+    <div id="join-card">
+      <h1>Snow Day</h1>
+      <p class="subtitle">Alpine hotel plow duty &mdash; localhost multiplayer</p>
+      <label for="name-input">Your name</label>
+      <input id="name-input" type="text" maxlength="20" autocomplete="off" />
+      <button id="join-btn">Start Plowing</button>
+      <p class="hint">WASD / Arrow keys to drive &middot; Enter to chat &middot; each browser window is its own player</p>
+    </div>
+  </div>
+
+  <div id="hud" class="hidden">
+    <div id="crosshair-info">
+      <span id="speed-readout">0 km/h</span>
+    </div>
+    <canvas id="minimap"></canvas>
+    <div id="chat-overlay">
+      <div id="chat-log"></div>
+      <input id="chat-input" type="text" maxlength="200" placeholder="Press Enter to chat&hellip;" />
+    </div>
+    <div id="player-list"></div>
+  </div>
+
+  <div id="loading">Loading Alpine Hotel&hellip;</div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

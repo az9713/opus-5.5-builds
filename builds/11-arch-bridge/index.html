@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Arch Bridge -- sketch to stone</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #111; overflow: hidden; font-family: Georgia, 'Times New Roman', serif; }
+  #c { display: block; width: 100%; height: 100%; }
+  #ui {
+    position: fixed; left: 16px; top: 16px; z-index: 10;
+    background: rgba(20, 16, 10, 0.72); color: #f1e9d8; padding: 14px 16px;
+    border-radius: 10px; width: 250px; box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+    font-size: 14px; line-height: 1.4;
+  }
+  #ui h1 { font-size: 15px; margin: 0 0 10px; letter-spacing: 0.02em; }
+  #ui label { display: block; margin-top: 10px; }
+  #ui .row { display: flex; justify-content: space-between; }
+  #ui input[type=range] { width: 100%; }
+  #ui button {
+    margin-top: 12px; width: 100%; padding: 8px 10px; border: none; border-radius: 6px;
+    background: #8a3324; color: #fff2e6; font-size: 13px; cursor: pointer;
+  }
+  #ui button.secondary { background: #3d5a3a; }
+  #hint { position: fixed; right: 16px; bottom: 12px; z-index: 10; color: #f1e9d8cc; font-size: 12px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <h1>Arch Bridge</h1>
+  <label>Cart mass (kg)
+    <div class="row"><span></span><span id="massVal">350</span></div>
+    <input id="massSlider" type="range" min="50" max="1200" step="10" value="350" />
+  </label>
+  <label>Arch rise (m)
+    <div class="row"><span></span><span id="riseVal">2.5</span></div>
+    <input id="riseSlider" type="range" min="1.4" max="3.6" step="0.1" value="2.5" />
+  </label>
+  <label>Block friction
+    <div class="row"><span></span><span id="frictionVal">0.65</span></div>
+    <input id="frictionSlider" type="range" min="0" max="0.9" step="0.01" value="0.65" />
+  </label>
+  <button id="removeKeystoneBtn">Remove keystone</button>
+  <button id="startBtn" class="secondary">Replay from sketch</button>
+</div>
+<div id="hint">drag to orbit &middot; scroll to zoom</div>
+<script src="bundle.js"></script>
+</body>
+</html>

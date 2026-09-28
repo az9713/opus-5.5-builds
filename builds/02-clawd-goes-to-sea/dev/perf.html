@@ -1,0 +1,22 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;background:#000">
+<script src="../node_modules/p5/lib/p5.min.js"></script>
+<script src="../node_modules/p5.brush/dist/p5.brush.js"></script>
+<script>
+window.MODE='wash';
+function setup(){ createCanvas(1280,720,WEBGL); pixelDensity(1); brush.scaleBrushes(2.5); noLoop(); window.ready=true;}
+function draw(){
+  randomSeed(7); noiseSeed(7);
+  background('#f3e6c8');
+  // coordinate probe: a small red rect at 0,0 size 40
+  brush.noStroke(); brush.wash('#ff0000',255); brush.rect(0,0,40,40); brush.noWash();
+  for(let i=0;i<20;i++){
+    const x=100+ (i%5)*230, y=100+Math.floor(i/5)*150;
+    if(MODE==='fill'){ brush.fill('#e8742c',200); brush.fillBleed(0.15); brush.fillTexture(0.5,0.4);} else { brush.wash('#e8742c',255);}
+    brush.set('marker','#2b1a10',1); 
+    brush.rect(x,y,120,90);
+    brush.noFill(); brush.noWash();
+  }
+  brush.set('HB','#2b1a10',1); brush.line(640,0,640,720);
+}
+window.time=async (m)=>{MODE=m; const t0=performance.now(); for(let k=0;k<5;k++) {await redraw(); document.querySelector("canvas").getContext("webgl2").finish?.();} return (performance.now()-t0)/5;}
+</script></body></html>

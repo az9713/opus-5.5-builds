@@ -1,0 +1,10 @@
+00:35.609  blend            | Read blend: "<repo>\builds\07-storm-lighthouse\storm_lighthouse.blend"
+00:44.734  render           | Saved: '<repo>\builds\07-storm-lighthouse\test\eevee_001.png'
+00:49.125  render           | Saved: '<repo>\builds\07-storm-lighthouse\test\eevee_230.png'
+00:52.922  render           | Saved: '<repo>\builds\07-storm-lighthouse\test\eevee_263.png'
+TEST_FRAME 1
+TEST_FRAME 230
+TEST_FRAME 263
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 02:38:20)
+
+Blender quit

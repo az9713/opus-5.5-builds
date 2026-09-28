@@ -1,0 +1,28 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;background:#000">
+<script src="../node_modules/p5/lib/p5.min.js"></script>
+<script src="../node_modules/p5.brush/dist/p5.brush.js"></script>
+<script>
+function setup(){ createCanvas(1280,720,WEBGL); pixelDensity(1); brush.scaleBrushes(2.5); noLoop(); window.ready=true;}
+function draw(){
+  randomSeed(3);
+  background('#f3e6c8'); translate(-width/2,-height/2);
+  const names=['marker','pen','rotring','HB','2B','charcoal','crayon','pastel'];
+  names.forEach((n,i)=>{ const x=40+i*150;
+    brush.noFill(); brush.wash('#e8742c',255); brush.set(n,'#1d130c',1.5); brush.rect(x,40,110,80); brush.noWash();
+    brush.set(n,'#1d130c',3); brush.noWash(); brush.line(x,160,x+110,180);
+  });
+  // ordering: brush rect, then native rect over it, then brush rect over native
+  brush.noStroke(); brush.wash('#2a6fdb',255); brush.rect(100,250,200,150); brush.noWash();
+  noStroke(); fill('#ffd000'); rect(180,300,200,150);
+  brush.wash('#d0204a',255); brush.rect(260,350,200,150); brush.noWash();
+  // polygon with wash + stroke
+  brush.set('pen','#1d130c',2); brush.wash('#6bbf59',255); brush.polygon([[600,250],[800,280],[760,450],[620,420]]); brush.noWash();
+  // circle with fill watercolor
+  brush.noStroke(); brush.fill('#2a9dc0',180); brush.fillBleed(0.2); brush.fillTexture(0.55,0.5); brush.circle(1000,350,90); brush.noFill();
+  // beginShape curve
+  brush.set('marker','#1d130c',2); brush.wash('#ffffff',255); brush.beginShape(0.5); [[500,550],[650,520],[700,650],[520,680]].forEach(p=>brush.vertex(...p)); brush.endShape(CLOSE); brush.noWash();
+  // alpha native
+  fill(255,0,0,80); rect(900,500,200,150);
+}
+window.go=async()=>{await redraw();};
+</script></body></html>

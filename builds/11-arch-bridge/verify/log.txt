@@ -1,0 +1,1 @@
+[console:warn] THREE.WebGLShadowMap: PCFSoftShadowMap has been removed. Using PCFShadowMap instead.

@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Meridian Title Sequence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Bodoni+Moda:opsz,wght@6..96,400..900&family=IBM+Plex+Mono:wght@400;500&display=block" rel="stylesheet">
+<style>
+:root{--bg:#000;--ink:#efe6d6;--ember:#ff5a1f;--dim:#8a8274}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);overflow:hidden}
+body{display:grid;place-items:center;font-family:"IBM Plex Mono",ui-monospace,monospace}
+canvas{display:block}
+#gate{position:fixed;inset:0;display:grid;place-content:center;gap:22px;justify-items:center;
+  background:rgba(0,0,0,.72);border:0;color:var(--ink);cursor:pointer;font:inherit;
+  letter-spacing:.32em;text-transform:uppercase;font-size:12px;padding:16px;text-align:center}
+#gate[hidden]{display:none}
+#gate .play{display:grid;place-items:center;width:84px;height:84px;border:1px solid var(--ember);border-radius:50%;
+  transition:transform .4s cubic-bezier(.2,.8,.2,1),background .4s}
+#gate .play::before{content:"";margin-left:6px;border-left:18px solid var(--ember);border-top:11px solid transparent;border-bottom:11px solid transparent}
+#gate:hover .play,#gate:focus-visible .play{transform:scale(1.08);background:rgba(255,90,31,.12)}
+#gate:focus-visible{outline:none}
+#gate .k{color:var(--dim)}
+#gate .t{font-size:13px}
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="Title sequence for a film called Meridian"></canvas>
+<button id="gate" type="button" hidden>
+  <span class="t">A title sequence &middot; No. 04</span>
+  <span class="play" aria-hidden="true"></span>
+  <span class="k" id="gateHint">15 seconds &middot; sound on &middot; space to play</span>
+</button>
+<script>
+"use strict";
+/* ============================================================
+   MERIDIAN — main title sequence, 15.0 s
+   One clock t drives picture and score. Design space 1920x803 (2.39:1).
+   ?t=7.2      render one still frame at 7.2 s
+   ?autoplay=1 play picture without the click gate (no sound)
+   ============================================================ */
+const DW = 1920, DH = 803, CX = DW / 2, CY = DH / 2, DUR = 15;
+const INK = '#efe6d6', EMBER = '#ff5a1f', DIM = '#8a8274';
+const ARCH = 'Archivo, "Arial Narrow", Arial, sans-serif';
+const BOD = '"Bodoni Moda", Didot, "Times New Roman", serif';
+const MONO = '"IBM Plex Mono", ui-monospace, monospace';
+
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const off = document.createElement('canvas'), octx = off.getContext('2d');
+let S = 1; // device px per design px
+
+/* ---------- math ---------- */
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const eOutExpo = x => x >= 1 ? 1 : 1 - Math.pow(2, -10 * x);
+const eOutCubic = x => 1 - Math.pow(1 - x, 3);
+const eInOut = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+function hash(a, b = 0) { let h = Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16; return (h >>> 0) / 4294967296; }
+
+/* ---------- improved Perlin noise ---------- */
+const P = new Uint8Array(512);
+{ const p = [...Array(256).keys()]; let s = 90210; for (let i = 255; i > 0; i--) { s = (s * 16807) % 2147483647; const j = s % (i + 1); [p[i], p[j]] = [p[j], p[i]]; } for (let i = 0; i < 512; i++) P[i] = p[i & 255]; }
+const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
+function grad(h, x, y, z) { const u = h < 8 ? x : y, v = h < 4 ? y : (h === 12 || h === 14 ? x : z); return ((h & 1) ? -u : u) + ((h & 2) ? -v : v); }
+function perlin(x, y, z) {
+  let X = Math.floor(x), Y = Math.floor(y), Z = Math.floor(z); x -= X; y -= Y; z -= Z; X &= 255; Y &= 255; Z &= 255;
+  const u = fade(x), v = fade(y), w = fade(z);
+  const A = P[X] + Y, AA = P[A] + Z, AB = P[A + 1] + Z, B = P[X + 1] + Y, BA = P[B] + Z, BB = P[B + 1] + Z;
+  return lerp(lerp(lerp(grad(P[AA] & 15, x, y, z), grad(P[BA] & 15, x - 1, y, z), u), lerp(grad(P[AB] & 15, x, y - 1, z), grad(P[BB] & 15, x - 1, y - 1, z), u), v),
+    lerp(lerp(grad(P[AA + 1] & 15, x, y, z - 1), grad(P[BA + 1] & 15, x - 1, y, z - 1), u), lerp(grad(P[AB + 1] & 15, x, y - 1, z - 1), grad(P[BB + 1] & 15, x - 1, y - 1, z - 1), u), v), w);
+}
+
+/* ---------- topographic contours (marching squares) ---------- */
+const CS = 14, COLS = Math.ceil(DW / CS) + 2, ROWS = Math.ceil(DH / CS) + 2;
+const FIELD = new Float32Array(COLS * ROWS);
+const SEGS = [[], [3, 2], [2, 1], [3, 1], [0, 1], [3, 0, 2, 1], [0, 2], [3, 0], [3, 0], [0, 2], [0, 1, 3, 2], [0, 1], [3, 1], [2, 1], [3, 2], []];
+const LEVELS = []; for (let l = -0.62; l < 1.3; l += 0.105) LEVELS.push(l);
+
+function buildField(tt, seed) {
+  const sc = 0.0021;
+  for (let j = 0; j < ROWS; j++) for (let i = 0; i < COLS; i++) {
+    const x = (i - 1) * CS, y = (j - 1) * CS;
+    const dx = (x - CX) / 430, dy = (y - CY) / 250;
+    FIELD[j * COLS + i] = perlin(x * sc + seed, y * sc, tt * 0.07) * 0.95
+      + perlin(x * sc * 2.2, y * sc * 2.2 + seed, tt * 0.11 + 7) * 0.32
+      + 0.95 * Math.exp(-(dx * dx + dy * dy));
+  }
+}
+function strokeLevels(c) {
+  // c: 2d context already transformed into design space
+  for (let li = 0; li < LEVELS.length; li++) {
+    const L = LEVELS[li], index = li % 5 === 0;
+    c.beginPath();
+    for (let j = 0; j < ROWS - 1; j++) for (let i = 0; i < COLS - 1; i++) {
+      const a = FIELD[j * COLS + i], b = FIELD[j * COLS + i + 1], cc = FIELD[(j + 1) * COLS + i + 1], d = FIELD[(j + 1) * COLS + i];
+      const k = (a > L) << 3 | (b > L) << 2 | (cc > L) << 1 | (d > L);
+      if (k === 0 || k === 15) continue;
+      const x0 = (i - 1) * CS, y0 = (j - 1) * CS, sg = SEGS[k];
+      for (let s = 0; s < sg.length; s += 2) {
+        for (let e = 0; e < 2; e++) {
+          const ed = sg[s + e]; let px, py;
+          if (ed === 0) { px = x0 + CS * (L - a) / (b - a); py = y0; }
+          else if (ed === 1) { px = x0 + CS; py = y0 + CS * (L - b) / (cc - b); }
+          else if (ed === 2) { px = x0 + CS * (L - d) / (cc - d); py = y0 + CS; }
+          else { px = x0; py = y0 + CS * (L - a) / (d - a); }
+          e ? c.lineTo(px, py) : c.moveTo(px, py);
+        }
+      }
+    }
+    c.lineWidth = index ? 2.1 : 1.05;
+    c.globalAlpha = index ? 0.62 : 0.3;
+    c.stroke();
+  }
+  c.globalAlpha = 1;
+}
+// Draws a contour map into the offscreen canvas. reveal = half-width (design px) of the visible band around the meridian.
+function contourLayer(tt, { zoom = 1, color = INK, reveal = 9999, seed = 0 }) {
+  buildField(tt, seed);
+  octx.setTransform(1, 0, 0, 1, 0, 0);
+  octx.globalCompositeOperation = 'source-over';
+  octx.clearRect(0, 0, off.width, off.height);
+  octx.setTransform(S * zoom, 0, 0, S * zoom, (CX - CX * zoom) * S, (CY - CY * zoom) * S);
+  octx.strokeStyle = color; octx.lineJoin = 'round';
+  strokeLevels(octx);
+  if (reveal < DW) {
+    const F = 260, R = Math.max(1, reveal);
+    octx.setTransform(S, 0, 0, S, 0, 0);
+    octx.globalCompositeOperation = 'destination-in';
+    const g = octx.createLinearGradient(CX - R - F, 0, CX + R + F, 0), tot = 2 * (R + F);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(F / tot, 'rgba(0,0,0,1)');
+    g.addColorStop(1 - F / tot, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    octx.fillStyle = g; octx.fillRect(0, 0, DW, DH);
+    octx.globalCompositeOperation = 'source-over';
+  }
+}
+
+/* ---------- type helpers ---------- */
+function setFont(spec, stretch = 'normal') { ctx.font = spec; if ('fontStretch' in ctx) ctx.fontStretch = stretch; }
+// Manual tracking so spacing is identical in every browser. align: 'left' | 'center' | 'right'
+function spacedWidth(txt, ls) { let w = 0; for (const ch of txt) w += ctx.measureText(ch).width; return w + ls * Math.max(0, [...txt].length - 1); }
+function spaced(txt, x, y, ls, align = 'left') {
+  const w = spacedWidth(txt, ls); let cx = align === 'center' ? x - w / 2 : align === 'right' ? x - w : x;
+  ctx.textAlign = 'left';
+  for (const ch of txt) { ctx.fillText(ch, cx, y); cx += ctx.measureText(ch).width + ls; }
+  return w;
+}
+// Digits settle one by one from random figures to their final value.
+function scramble(txt, p, t, salt = 0) {
+  const chars = [...txt], n = chars.length, fr = Math.floor(t * 30);
+  return chars.map((ch, i) => (/\d/.test(ch) && p < (i + 1) / n) ? String(Math.floor(hash(fr + i * 17, salt) * 10)) : ch).join('');
+}
+function fmtDMS(sec) {
+  const d = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return `${d}°${String(m).padStart(2, '0')}′${s.toFixed(1).padStart(4, '0')}″`;
+}
+
+/* ---------- film finish: grain, vignette ---------- */
+const grains = [];
+function buildGrain() {
+  for (let n = 0; n < 6; n++) {
+    const g = document.createElement('canvas'); g.width = g.height = 256; const gc = g.getContext('2d');
+    const img = gc.createImageData(256, 256);
+    for (let i = 0; i < img.data.length; i += 4) { const v = Math.floor(hash(i, n + 3) * 255); img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+    gc.putImageData(img, 0, 0); grains.push(ctx.createPattern(g, 'repeat'));
+  }
+}
+function finish(t) {
+  const fr = Math.floor(t * 24);
+  ctx.setTransform(S, 0, 0, S, 0, 0);
+  // vignette
+  const v = ctx.createRadialGradient(CX, CY, DH * 0.35, CX, CY, DW * 0.62);
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.62)');
+  ctx.fillStyle = v; ctx.fillRect(0, 0, DW, DH);
+  // grain, re-registered every frame
+  const pat = grains[fr % grains.length];
+  ctx.save(); ctx.translate(hash(fr, 1) * -256, hash(fr, 2) * -256);
+  ctx.fillStyle = pat;
+  ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = 0.16; ctx.fillRect(0, 0, DW + 256, DH + 256);
+  ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = 0.035; ctx.fillRect(0, 0, DW + 256, DH + 256);
+  ctx.restore();
+  // exposure flicker
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = `rgba(0,0,0,${0.015 + hash(fr, 9) * 0.035})`; ctx.fillRect(0, 0, DW, DH);
+  // occasional dust
+  if (hash(fr, 5) < 0.22) {
+    ctx.fillStyle = hash(fr, 6) < 0.5 ? 'rgba(239,230,214,.5)' : 'rgba(0,0,0,.7)';
+    ctx.beginPath(); ctx.ellipse(hash(fr, 7) * DW, hash(fr, 8) * DH, 1 + hash(fr, 10) * 2.2, 0.8 + hash(fr, 11) * 1.4, hash(fr, 12) * 3, 0, 7); ctx.fill();
+  }
+  if (hash(fr, 13) < 0.06) { // hair-thin scratch
+    const x = hash(fr, 14) * DW; ctx.fillStyle = 'rgba(239,230,214,.12)'; ctx.fillRect(x, 0, 1, DH);
+  }
+}
+
+/* ---------- story ---------- */
+const CREDITS = [
+  { t0: 1.40, t1: 3.60, side: -1, label: 'NORTHLIGHT PICTURES', names: ['PRESENTS'] },
+  { t0: 3.80, t1: 5.75, side: 1, label: 'A FILM BY', names: ['ISOLDE VANCE'] },
+  { t0: 5.90, t1: 7.85, side: -1, label: 'STARRING', names: ['AUGUST REYES', 'MARA OKONJO', 'THEO LINDQVIST'] },
+];
+const WORDS = ['EVERY', 'MAP', 'IS', 'A', 'LIE'], W0 = 8.0, WSTEP = 0.3, HIT = 9.6;
+const BILLING = [
+  [['r', 'NORTHLIGHT PICTURES PRESENTS'], ['r', 'A'], ['n', 'HOLLOWAY / VANCE'], ['r', 'PRODUCTION'], ['r', 'AN'], ['n', 'ISOLDE VANCE'], ['r', 'FILM'], ['n', 'AUGUST REYES'], ['n', 'MARA OKONJO'], ['n', 'THEO LINDQVIST'], ['n', '“MERIDIAN”']],
+  [['r', 'CASTING BY'], ['n', 'RUTH ADEYEMI'], ['r', 'MUSIC BY'], ['n', 'HALVARD ESS'], ['r', 'EDITED BY'], ['n', 'JONAS KREEL'], ['r', 'PRODUCTION DESIGNER'], ['n', 'ELENA MARCH'], ['r', 'DIRECTOR OF PHOTOGRAPHY'], ['n', 'SØREN VIK']],
+  [['r', 'EXECUTIVE PRODUCERS'], ['n', 'PAUL ATWELL'], ['n', 'DIANE OSEI'], ['r', 'PRODUCED BY'], ['n', 'CLARA HOLLOWAY'], ['r', 'WRITTEN AND DIRECTED BY'], ['n', 'ISOLDE VANCE']],
+];
+
+function drawMeridian(t, color) {
+  if (t < 0.4) return;
+  const h = DH * eOutExpo(seg(t, 0.75, 1.7));
+  const fl = 0.86 + 0.14 * hash(Math.floor(t * 24), 21);
+  ctx.save();
+  ctx.globalAlpha = seg(t, 0.4, 0.75) * fl;
+  ctx.shadowColor = EMBER; ctx.shadowBlur = 22;
+  ctx.fillStyle = color;
+  if (h < 8) { ctx.beginPath(); ctx.arc(CX, CY, 3.2, 0, 7); ctx.fill(); }
+  ctx.fillRect(CX - 1.2, CY - h / 2, 2.4, h);
+  ctx.restore();
+  // graticule ticks travelling north along the line
+  const ta = seg(t, 1.7, 2.6) * 0.55;
+  if (ta > 0) {
+    ctx.fillStyle = color; ctx.globalAlpha = ta;
+    const step = 34, o = (t * 22) % step, base = Math.floor(t * 22 / step);
+    for (let k = -1, y = o - step; y < DH + step; y += step, k++) {
+      const major = ((k - base) % 5 + 5) % 5 === 0, w = major ? 11 : 5;
+      ctx.fillRect(CX - 3 - w, y, w, 1.2); ctx.fillRect(CX + 3, y, w, 1.2);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawHUD(t, color) {
+  const a = seg(t, 1.5, 2.2) * (1 - seg(t, 9.3, 9.45));
+  if (a <= 0) return;
+  const lon = 11649.6 * (1 - eOutCubic(seg(t, 1.5, 9.4)));
+  ctx.globalAlpha = a * 0.62; ctx.fillStyle = color; setFont(`400 14px ${MONO}`);
+  ctx.textBaseline = 'alphabetic';
+  spaced('N  51°28′38.2″', 72, 74, 3, 'left');
+  spaced('W  ' + fmtDMS(lon), 72, 98, 3, 'left');
+  spaced('SHEET 07 / 112', DW - 72, 74, 3, 'right');
+  spaced('SCALE 1:25 000', DW - 72, 98, 3, 'right');
+  spaced('CONTOUR INTERVAL 10 M', 72, DH - 72, 3, 'left');
+  spaced('DATUM  WGS 84', DW - 72, DH - 72, 3, 'right');
+  ctx.globalAlpha = 1;
+}
+
+function drawCredit(c, t) {
+  if (t < c.t0 || t > c.t1) return;
+  const pin = eOutExpo(seg(t, c.t0, c.t0 + 1.1)), pout = seg(t, c.t1 - 0.45, c.t1);
+  const a = seg(t, c.t0, c.t0 + 0.35) * (1 - pout);
+  const gap = 64, x = CX + c.side * gap, align = c.side < 0 ? 'right' : 'left';
+  const nameSize = c.names.length > 1 ? 50 : 62, lead = nameSize * 1.24;
+  const blockH = 34 + lead * c.names.length;
+  let y = CY - blockH / 2 + 22;
+  // wipe out from the meridian
+  const sweep = 1100 * pin;
+  ctx.save();
+  ctx.beginPath(); c.side < 0 ? ctx.rect(CX - sweep, 0, sweep, DH) : ctx.rect(CX, 0, sweep, DH); ctx.clip();
+  if (pout > 0) ctx.filter = `blur(${(pout * 9).toFixed(2)}px)`;
+  ctx.globalAlpha = a; ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = EMBER; setFont(`500 17px ${MONO}`);
+  spaced(c.label, x, y, 7 + 5 * (1 - pin), align);
+  y += 34 + nameSize * 0.72;
+  ctx.fillStyle = INK; setFont(`300 ${nameSize}px ${ARCH}`, 'expanded');
+  const ls = lerp(34, 13, pin) + pout * 10;
+  for (const n of c.names) { spaced(n, x, y, ls, align); y += lead; }
+  ctx.restore();
+}
+
+function drawWord(i, t, inv) {
+  const lt = t - (W0 + i * WSTEP), p = clamp(lt / WSTEP);
+  const word = WORDS[i], last = i === WORDS.length - 1;
+  const size = last ? 330 : 250, s = 1 + 0.14 * (1 - eOutExpo(p));
+  ctx.save();
+  ctx.translate(CX, CY); ctx.scale(s, s);
+  setFont(`900 ${size}px ${ARCH}`, 'ultra-expanded');
+  ctx.textBaseline = 'middle';
+  const ls = last ? 30 : 18, w = spacedWidth(word, ls), y = size * 0.04;
+  const ab = inv ? 0 : (1 - eOutCubic(p)) * 14 + (last ? 4 : 0);
+  if (ab > 0.3) {
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = 'rgba(255,40,20,.75)'; spaced(word, -ab, y, ls, 'center');
+    ctx.fillStyle = 'rgba(20,200,255,.6)'; spaced(word, ab, y, ls, 'center');
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  ctx.fillStyle = inv ? '#0b0a09' : last ? EMBER : INK;
+  spaced(word, 0, y, ls, 'center');
+  // knockout gap where the meridian cuts through the word (not LIE: its I rides the meridian)
+  if (!last) { ctx.fillStyle = inv ? INK : '#000'; ctx.fillRect(-9, -size * 0.42, 18, size * 0.84); }
+  // registration label
+  ctx.fillStyle = inv ? '#0b0a09' : EMBER; setFont(`500 15px ${MONO}`);
+  ctx.textBaseline = 'alphabetic';
+  spaced(`0${i + 1} / 05`, w / 2 + 26, -size * 0.3, 4, 'left');
+  ctx.restore();
+}
+
+function actOne(t, shake) {
+  if (t >= HIT - 0.1) return; // 100 ms of true black before the hit
+  const wi = t >= W0 ? Math.min(WORDS.length - 1, Math.floor((t - W0) / WSTEP)) : -1;
+  const inv = wi === 1 || wi === 3;
+  if (inv) { ctx.fillStyle = INK; ctx.fillRect(-20, -20, DW + 40, DH + 40); }
+  const zoom = 1 + 0.1 * eInOut(seg(t, 0.6, HIT)) + (wi >= 0 ? 0.03 * (1 - clamp((t - W0 - wi * WSTEP) / WSTEP)) : 0);
+  const ca = seg(t, 1.0, 1.8);
+  if (ca > 0) {
+    contourLayer(t, { zoom, color: inv ? '#0b0a09' : INK, reveal: 1150 * eOutCubic(seg(t, 1.0, 4.4)) });
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, shake.x * S, shake.y * S); ctx.globalAlpha = ca * (wi >= 0 ? 0.8 : 0.72); ctx.drawImage(off, 0, 0); ctx.restore();
+  }
+  drawHUD(t, inv ? '#0b0a09' : INK);
+  for (const c of CREDITS) drawCredit(c, t);
+  if (wi >= 0) drawWord(wi, t, inv);
+  drawMeridian(t, EMBER);
+}
+
+/* ---------- title lockup ---------- */
+const TITLE = ['M', 'E', 'R', 'I', 'D', 'I', 'A', 'N'], TSIZE = 206, IW = 7;
+let TW = null, CAP = 146;
+function measureTitle() {
+  setFont(`500 ${TSIZE}px ${BOD}`);
+  TW = TITLE.map(ch => ch === 'I' ? IW : ctx.measureText(ch).width);
+  const m = ctx.measureText('M'); CAP = m.actualBoundingBoxAscent || TSIZE * 0.7;
+}
+function titleLayout(ls) {
+  const xs = []; let x = 0; for (let k = 0; k < TITLE.length; k++) { xs.push(x); x += TW[k] + ls; }
+  const off = CX - (xs[3] + IW / 2); // first I sits on the meridian
+  return xs.map(v => v + off);
+}
+
+function actTwo(t, shake) {
+  const out = 1 - seg(t, 14.05, 14.6);
+  const glow = eOutCubic(seg(t, HIT, 11.0)) * (1 - seg(t, 13.9, 14.9));
+  const BASE = CY + 62, TOP = BASE - CAP;
+  // ember world behind the doors
+  ctx.fillStyle = '#080403'; ctx.fillRect(-20, -20, DW + 40, DH + 40);
+  const g = ctx.createRadialGradient(CX, TOP + CAP / 2, 10, CX, TOP + CAP / 2, 1000);
+  g.addColorStop(0, `rgba(255,96,36,${0.34 * glow})`); g.addColorStop(0.45, `rgba(150,40,10,${0.16 * glow})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, DW, DH);
+  contourLayer(t + 40, { zoom: 1.28 - 0.22 * eOutCubic(seg(t, HIT, 15)), color: EMBER, seed: 31.7 });
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, shake.x * S, shake.y * S); ctx.globalAlpha = 0.2 * glow; ctx.drawImage(off, 0, 0); ctx.restore();
+
+  // the old map splits along the meridian and swings away
+  const open = eOutExpo(seg(t, HIT, 10.9));
+  if (open < 1) {
+    const dx = open * DW * 0.56;
+    contourLayer(HIT, { zoom: 1.1 });
+    for (const side of [-1, 1]) {
+      const px = side < 0 ? -dx : CX + dx;
+      ctx.fillStyle = '#000'; ctx.fillRect(px, 0, CX, DH);
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, shake.x * S, shake.y * S);
+      ctx.globalAlpha = 0.72 * (1 - open);
+      const sx = side < 0 ? 0 : CX * S;
+      ctx.drawImage(off, sx, 0, CX * S, DH * S, (side < 0 ? -dx : CX + dx) * S, 0, CX * S, DH * S);
+      ctx.restore();
+      // burning edge of each door
+      ctx.save(); ctx.globalAlpha = 1 - open * 0.8; ctx.shadowColor = EMBER; ctx.shadowBlur = 26; ctx.fillStyle = EMBER;
+      ctx.fillRect(side < 0 ? CX - dx - 2 : CX + dx, 0, 2, DH); ctx.restore();
+    }
+  }
+
+  // letters stream out of the meridian
+  const ls = 40 + 12 * eInOut(seg(t, 10.8, 15));
+  const xs = titleLayout(ls);
+  setFont(`500 ${TSIZE}px ${BOD}`); ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+  for (let k = 0; k < TITLE.length; k++) {
+    if (TITLE[k] === 'I') continue;
+    const d = Math.abs(k - 3.5), t0 = 9.72 + d * 0.07;
+    const p = eOutExpo(seg(t, t0, t0 + 1.35));
+    if (p <= 0) continue;
+    const x = lerp(CX - TW[k] / 2, xs[k], p);
+    ctx.save();
+    ctx.globalAlpha = Math.sqrt(p) * out;
+    if (p < 0.98) ctx.filter = `blur(${((1 - p) * 16).toFixed(2)}px)`;
+    ctx.fillStyle = INK; ctx.fillText(TITLE[k], x, BASE);
+    ctx.restore();
+  }
+  // the two I's are the meridian itself
+  const collapse = eInOut(seg(t, 14.35, 14.85));
+  const mid = TOP + CAP / 2;
+  const e = eInOut(seg(t, 9.65, 10.7));
+  let top = lerp(0, TOP, e), bot = lerp(DH, BASE, e);
+  top = lerp(top, mid, collapse); bot = lerp(bot, mid, collapse);
+  const hot = 1 - seg(t, HIT, 10.1);
+  ctx.save(); ctx.shadowColor = EMBER; ctx.shadowBlur = 20 + 40 * hot; ctx.fillStyle = hot > 0.02 ? `rgb(255,${Math.round(90 + 160 * hot)},${Math.round(31 + 200 * hot)})` : EMBER;
+  const w1 = IW + 10 * hot * hot;
+  ctx.globalAlpha = 1 - seg(t, 14.8, 15);
+  ctx.fillRect(xs[3] - (w1 - IW) / 2, top, w1, Math.max(bot - top, 0));
+  if (bot - top < 6) { ctx.beginPath(); ctx.arc(CX + IW / 2, mid, 4, 0, 7); ctx.fill(); }
+  const i2 = eOutExpo(seg(t, 10.25, 11.3)) * (1 - eInOut(seg(t, 14.1, 14.45)));
+  if (i2 > 0) {
+    ctx.globalAlpha = seg(t, 10.25, 10.4);
+    const x2 = lerp(xs[3], xs[5], i2);
+    ctx.fillRect(x2, lerp(TOP, TOP, 0), IW, CAP);
+  }
+  ctx.restore();
+
+  // equator rule and coordinates under the title
+  const rule = eOutExpo(seg(t, 11.0, 12.3)), ry = BASE + 58;
+  if (rule > 0) {
+    // spans the lockup exactly, and keeps spanning it while the tracking opens
+    const lx = lerp(CX, xs[0] - 24, rule), rx = lerp(CX + IW, xs[7] + TW[7] + 24, rule);
+    ctx.globalAlpha = 0.5 * out; ctx.fillStyle = INK;
+    ctx.fillRect(lx, ry, Math.max(0, CX - 18 - lx), 1.2); ctx.fillRect(CX + 18 + IW, ry, Math.max(0, rx - CX - 18 - IW), 1.2);
+    ctx.fillRect(lx, ry - 5, 1.2, 11); ctx.fillRect(rx - 1.2, ry - 5, 1.2, 11);
+    ctx.globalAlpha = 1;
+  }
+  const ca = seg(t, 11.3, 11.9) * out;
+  if (ca > 0) {
+    const sp = seg(t, 11.3, 12.4);
+    ctx.globalAlpha = ca; setFont(`500 18px ${MONO}`); ctx.fillStyle = EMBER;
+    spaced(scramble('51°28′38.2″ N', sp, t, 1), CX - 34, ry + 42, 6, 'right');
+    spaced(scramble('0°00′00.0″', sp, t, 2), CX + 34 + IW, ry + 42, 6, 'left');
+    ctx.globalAlpha = 1;
+  }
+  // release line + billing block
+  const ra = seg(t, 12.2, 12.9) * out;
+  if (ra > 0) {
+    ctx.globalAlpha = ra; ctx.fillStyle = INK; setFont(`600 20px ${ARCH}`, 'expanded');
+    spaced('IN CINEMAS  ·  2027', CX + IW / 2, TOP - 70, 14, 'center');
+    ctx.globalAlpha = 1;
+  }
+  const ba = seg(t, 12.45, 13.3) * out;
+  if (ba > 0) {
+    ctx.globalAlpha = ba * 0.72; ctx.fillStyle = INK; ctx.textBaseline = 'alphabetic';
+    BILLING.forEach((line, li) => {
+      const parts = line.map(([k, s]) => { setFont(k === 'n' ? `500 19px ${ARCH}` : `500 11.5px ${ARCH}`, 'ultra-condensed'); return { k, s, w: spacedWidth(s, k === 'n' ? 1.2 : 1.6) }; });
+      const gapW = 14, total = parts.reduce((s, p) => s + p.w, 0) + gapW * (parts.length - 1);
+      let x = CX + IW / 2 - total / 2; const y = DH - 116 + li * 24;
+      for (const p of parts) { setFont(p.k === 'n' ? `500 19px ${ARCH}` : `500 11.5px ${ARCH}`, 'ultra-condensed'); spaced(p.s, x, y, p.k === 'n' ? 1.2 : 1.6, 'left'); x += p.w + gapW; }
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  // flash frame on the hit
+  const fl = 1 - eOutCubic(seg(t, HIT, 9.95));
+  if (fl > 0) { ctx.fillStyle = `rgba(255,236,214,${0.9 * fl})`; ctx.fillRect(-20, -20, DW + 40, DH + 40); }
+}
+
+function render(t) {
+  t = clamp(t, 0, DUR);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.filter = 'none'; ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cv.width, cv.height);
+  const kick = t >= HIT ? Math.pow(1 - seg(t, HIT, 10.25), 2) * 9 : 0;
+  const shake = {
+    x: Math.sin(t * 11.3) * 0.5 + Math.sin(t * 5.7 + 1) * 0.4 + Math.sin(t * 83) * kick,
+    y: Math.cos(t * 9.1) * 0.4 + Math.cos(t * 71) * kick,
+  };
+  ctx.setTransform(S, 0, 0, S, shake.x * S, shake.y * S);
+  if (t < HIT) actOne(t, shake); else actTwo(t, shake);
+  finish(t);
+}
+
+/* ---------- score (WebAudio, synthesized) ---------- */
+let AC = null, comp = null, bus = null, verb = null, noiseBuf = null, T0 = 0;
+function audioInit() {
+  if (AC) return;
+  AC = new (window.AudioContext || window.webkitAudioContext)();
+  comp = AC.createDynamicsCompressor();
+  comp.threshold.value = -16; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.25;
+  comp.connect(AC.destination);
+  const n = AC.sampleRate * 2; noiseBuf = AC.createBuffer(1, n, AC.sampleRate);
+  const d = noiseBuf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+}
+function impulse(sec, decay) {
+  const n = Math.floor(AC.sampleRate * sec), b = AC.createBuffer(2, n, AC.sampleRate);
+  for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, decay); }
+  return b;
+}
+function send(node, dry = 1, wet = 0) {
+  const g = AC.createGain(); g.gain.value = dry; node.connect(g); g.connect(bus);
+  if (wet) { const w = AC.createGain(); w.gain.value = wet; node.connect(w); w.connect(verb); }
+}
+function env(g, t, a, peak, d) { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + d); }
+function noiseSrc() { const s = AC.createBufferSource(); s.buffer = noiseBuf; s.loop = true; return s; }
+function osc(type, f) { const o = AC.createOscillator(); o.type = type; o.frequency.value = f; return o; }
+
+function kick(t, amp = 0.9) {
+  const o = osc('sine', 110), g = AC.createGain();
+  o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(36, t + 0.24);
+  env(g, t, 0.004, amp, 0.55); o.connect(g); send(g, 1, 0.1); o.start(t); o.stop(t + 0.7);
+}
+function tick(t, amp, pan) {
+  const n = noiseSrc(), f = AC.createBiquadFilter(), g = AC.createGain(), p = AC.createStereoPanner();
+  f.type = 'highpass'; f.frequency.value = 6500; env(g, t, 0.001, amp, 0.04); p.pan.value = pan;
+  n.connect(f); f.connect(g); g.connect(p); send(p, 1, 0.25); n.start(t, Math.random()); n.stop(t + 0.08);
+}
+function ping(t, f, amp) {
+  for (const [m, a] of [[1, 1], [2.001, 0.35], [3.01, 0.12]]) {
+    const o = osc('sine', f * m), g = AC.createGain(); env(g, t, 0.003, amp * a, 2.4 / m);
+    o.connect(g); send(g, 0.8, 0.9); o.start(t); o.stop(t + 3);
+  }
+}
+function hit(t, big) {
+  kick(t, big ? 1 : 0.85);
+  const n = noiseSrc(), f = AC.createBiquadFilter(), g = AC.createGain();
+  f.type = 'lowpass'; f.frequency.value = big ? 2200 : 1400; env(g, t, 0.002, big ? 0.5 : 0.32, 0.28);
+  n.connect(f); f.connect(g); send(g, 1, 0.35); n.start(t, Math.random()); n.stop(t + 0.4);
+  const bp = AC.createBiquadFilter(), mg = AC.createGain(); bp.type = 'bandpass'; bp.frequency.value = 1900; bp.Q.value = 6;
+  env(mg, t, 0.002, 0.12, 0.35); bp.connect(mg); send(mg, 1, 0.5);
+  for (const fr of [183, 271.5, 402]) { const o = osc('square', fr); o.connect(bp); o.start(t); o.stop(t + 0.45); }
+}
+function drone(t0, t1) {
+  const lp = AC.createBiquadFilter(), g = AC.createGain();
+  lp.type = 'lowpass'; lp.Q.value = 3; lp.frequency.setValueAtTime(110, t0); lp.frequency.exponentialRampToValueAtTime(950, t1 - 0.1);
+  g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.16, t0 + 3); g.gain.setValueAtTime(0.16, t1 - 0.06); g.gain.linearRampToValueAtTime(0, t1);
+  lp.connect(g); send(g, 1, 0.2);
+  for (const f of [43.65, 43.93, 87.31, 130.5]) { const o = osc('sawtooth', f); o.connect(lp); o.start(t0); o.stop(t1 + 0.1); }
+  const sub = osc('sine', 43.65), sg = AC.createGain(); sg.gain.value = 0.5; sub.connect(sg); sg.connect(g); sub.start(t0); sub.stop(t1 + 0.1);
+}
+function riser(t0, t1) {
+  const n = noiseSrc(), bp = AC.createBiquadFilter(), g = AC.createGain();
+  bp.type = 'bandpass'; bp.Q.value = 5; bp.frequency.setValueAtTime(300, t0); bp.frequency.exponentialRampToValueAtTime(7000, t1);
+  g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.38, t1 - 0.02); g.gain.linearRampToValueAtTime(0, t1);
+  n.connect(bp); bp.connect(g); send(g, 1, 0.2); n.start(t0); n.stop(t1 + 0.05);
+  const o = osc('sawtooth', 110), og = AC.createGain(), olp = AC.createBiquadFilter(); olp.type = 'lowpass'; olp.frequency.value = 1600;
+  o.frequency.setValueAtTime(110, t0); o.frequency.exponentialRampToValueAtTime(880, t1);
+  og.gain.setValueAtTime(0.0001, t0); og.gain.exponentialRampToValueAtTime(0.07, t1 - 0.02); og.gain.linearRampToValueAtTime(0, t1);
+  o.connect(olp); olp.connect(og); send(og, 1, 0.1); o.start(t0); o.stop(t1 + 0.05);
+}
+function braam(t) {
+  const pre = AC.createGain(), sh = AC.createWaveShaper(), lp = AC.createBiquadFilter(), g = AC.createGain();
+  pre.gain.value = 0.22;
+  const k = 12, curve = new Float32Array(1024); for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = (1 + k) * x / (1 + k * Math.abs(x)); }
+  sh.curve = curve;
+  lp.type = 'lowpass'; lp.frequency.setValueAtTime(3200, t); lp.frequency.exponentialRampToValueAtTime(200, t + 4.6);
+  env(g, t, 0.015, 0.5, 5.2);
+  pre.connect(sh); sh.connect(lp); lp.connect(g); send(g, 1, 0.45);
+  for (const f of [43.65, 43.95, 87.31, 86.9, 103.83, 130.81]) { const o = osc('sawtooth', f); o.connect(pre); o.start(t); o.stop(t + 5.6); }
+  const sub = osc('sine', 58), sg = AC.createGain(); sub.frequency.setValueAtTime(58, t); sub.frequency.exponentialRampToValueAtTime(30, t + 1.8);
+  env(sg, t, 0.005, 0.85, 3.2); sub.connect(sg); send(sg, 1, 0); sub.start(t); sub.stop(t + 3.5);
+  const n = noiseSrc(), nf = AC.createBiquadFilter(), ng = AC.createGain(); nf.type = 'lowpass'; nf.frequency.value = 900;
+  env(ng, t, 0.002, 0.6, 1.3); n.connect(nf); nf.connect(ng); send(ng, 1, 0.6); n.start(t); n.stop(t + 1.5);
+}
+function pad(t0, t1) {
+  const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1700;
+  const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.05, t0 + 2.2); g.gain.setValueAtTime(0.05, t1 - 1.1); g.gain.linearRampToValueAtTime(0, t1);
+  lp.connect(g); send(g, 1, 0.6);
+  for (const f of [174.61, 207.65, 261.63, 392.0, 523.25]) for (const det of [-4, 4]) { const o = osc('triangle', f); o.detune.value = det; o.connect(lp); o.start(t0); o.stop(t1 + 0.1); }
+}
+function score() {
+  audioInit();
+  if (bus) { try { bus.disconnect(); } catch (e) {} }
+  bus = AC.createGain(); bus.gain.value = 0.9; bus.connect(comp);
+  verb = AC.createConvolver(); verb.buffer = impulse(3.4, 2.4);
+  const vg = AC.createGain(); vg.gain.value = 0.4; verb.connect(vg); vg.connect(bus);
+  const T = AC.currentTime + 0.15; T0 = T;
+  ping(T + 0.4, 1396.9, 0.05);
+  drone(T + 0.6, T + HIT - 0.12);
+  for (let k = 0; k < 32; k++) tick(T + 1.4 + k * 0.25, k % 4 === 0 ? 0.07 : 0.03, k % 2 ? 0.45 : -0.45); // accent on each second
+  for (const s of [1.4, 2.4, 3.4, 4.4, 5.4, 5.9, 6.4, 6.9, 7.4, 7.65, 7.9]) kick(T + s, 0.8);
+  WORDS.forEach((_, i) => hit(T + W0 + i * WSTEP, i === WORDS.length - 1));
+  riser(T + 8.0, T + HIT - 0.12);
+  braam(T + HIT);
+  ping(T + 11.3, 2093, 0.035);
+  pad(T + 10.6, T + 15.0);
+  kick(T + 14.35, 0.35);
+  ping(T + 14.85, 1396.9, 0.05);
+}
+
+/* ---------- playback ---------- */
+const gate = document.getElementById('gate'), hint = document.getElementById('gateHint');
+let playing = false, clockStart = 0, useAudio = false, rafId = 0;
+// Picture follows the audio clock for sync; if that clock never starts (no output device), fall back to the wall clock.
+function now() {
+  const pt = (performance.now() - clockStart) / 1000;
+  if (useAudio) { const at = AC.currentTime - T0; if (AC.state === 'running' && at > -0.14) return at; if (pt > 1) useAudio = false; }
+  return pt;
+}
+function play(withAudio) {
+  cancelAnimationFrame(rafId);
+  gate.hidden = true; playing = true; useAudio = false;
+  if (withAudio) {
+    try { score(); AC.resume(); useAudio = true; } catch (e) { useAudio = false; }
+  }
+  clockStart = performance.now() + 150;
+  rafId = requestAnimationFrame(loop);
+}
+function loop() {
+  if (!playing) return;
+  const t = now();
+  render(Math.max(0, t));
+  if (t < DUR + 0.25) rafId = requestAnimationFrame(loop);
+  else { playing = false; render(DUR); hint.textContent = 'play again · space'; gate.hidden = false; gate.focus(); }
+}
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const s = Math.min(innerWidth / DW, innerHeight / DH);
+  const w = Math.max(1, Math.floor(DW * s)), h = Math.max(1, Math.floor(DH * s));
+  cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  cv.width = off.width = Math.round(w * dpr); cv.height = off.height = Math.round(h * dpr);
+  S = cv.width / DW;
+}
+
+const params = new URLSearchParams(location.search);
+(async function boot() {
+  resize(); buildGrain();
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cv.width, cv.height);
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  try {
+    await Promise.race([Promise.all([
+      document.fonts.load(`300 62px Archivo`), document.fonts.load(`900 250px Archivo`),
+      document.fonts.load(`500 206px "Bodoni Moda"`), document.fonts.load(`500 17px "IBM Plex Mono"`), document.fonts.load(`400 14px "IBM Plex Mono"`),
+    ]), wait(3000)]);
+  } catch (e) { /* fall back to system faces */ }
+  measureTitle();
+  const still = params.has('t') ? parseFloat(params.get('t')) : null;
+  addEventListener('resize', () => { resize(); if (!playing) render(still ?? 0); });
+  if (still !== null && !Number.isNaN(still)) { render(still); document.body.dataset.ready = '1'; return; }
+  render(0);
+  if (params.has('autoplay')) { play(false); return; }
+  gate.hidden = false; gate.focus();
+  gate.addEventListener('click', () => play(true));
+  addEventListener('keydown', e => {
+    if ((e.code === 'Space' || e.code === 'Enter') && !gate.hidden) { e.preventDefault(); play(true); }
+    else if (e.key === 'r' || e.key === 'R') play(true);
+  });
+})();
+</script>
+</body>
+</html>

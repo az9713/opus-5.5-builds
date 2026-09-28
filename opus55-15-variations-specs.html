@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Opus 5.5 Build Variations</title>
+<style>
+  :root {
+    --bg: #0f172a; --card: #1e293b; --text: #e2e8f0; --text2: #cbd5e1;
+    --muted: #94a3b8; --orange: #fb923c; --teal: #2dd4bf; --border: #334155;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text2); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 900px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { color: var(--text); font-size: 1.9rem; margin: 0 0 4px; }
+  h2 { color: var(--text); font-size: 1.35rem; margin: 0; }
+  h3 { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; margin: 18px 0 4px; }
+  p { margin: 6px 0; }
+  a { color: var(--teal); }
+  code { font: .9em ui-monospace, Consolas, monospace; color: var(--text); }
+  .sub { color: var(--muted); margin-bottom: 24px; }
+  .box { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin: 18px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  td a { text-decoration: none; }
+  .rank { color: var(--orange); font-weight: 700; font-size: 1.1rem; margin-right: 8px; }
+  .by { color: var(--muted); font-size: .9rem; }
+  .badge { display: inline-block; font-size: .72rem; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); margin-left: 6px; vertical-align: middle; }
+  .badge.live { border-color: var(--teal); color: var(--teal); }
+  .orig { color: var(--muted); }
+  ul.orig { margin-top: 0; }
+  .var strong { color: var(--text); }
+  .fix { color: var(--orange); }
+  pre { background: #0b1222; border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; white-space: pre-wrap; word-wrap: break-word; font: .88rem/1.55 ui-monospace, Consolas, monospace; color: var(--text); margin: 6px 0; }
+  ul { margin: 4px 0; padding-left: 20px; }
+  li { margin: 2px 0; }
+  .note { color: var(--muted); font-size: .9rem; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>15 Opus 5.5 builds — variation specs</h1>
+<p class="sub">Source: <code>transcript.txt</code> and frames from YouTube <code>dw4rYWy8nLw</code> ("Top 15 Things built with Claude Opus 5.5"). Version 2, written 2026-09-27. Specs only. No build in this file was run.</p>
+
+<div class="box">
+  <h2>How to read a spec</h2>
+  <p>Each spec keeps the style, medium, and limits of the original build. Each spec changes the subject only.</p>
+  <ul>
+    <li><strong>Original</strong> — what the creator built. The numbers come from the transcript and the on-screen labels in the video.</li>
+    <li><strong>Look (from frames)</strong> — what the video frames show. This is the style that the prompt copies.</li>
+    <li><strong>Variation</strong> — the new subject.</li>
+    <li><strong>Keeps</strong> — the medium, the technical limits, and the time or cost targets.</li>
+    <li><strong>Prompt</strong> — the text to paste into Claude Code. Short sentences, one instruction each.</li>
+    <li><strong>Needs</strong> — tools or inputs that you must supply first.</li>
+    <li><strong>Check</strong> — the result that you can see when the build passes.</li>
+  </ul>
+  <p class="note">How I got the look: I downloaded the video at 720p. I took 6 frames from each chapter, in the 10–15 seconds that the video shows each build. I looked at these frames. I did not see the full builds or the X posts. The video shows short clips only, so details outside the clips are unknown.</p>
+  <p class="note">Badge <span class="badge live">frames + live source</span> means I also read the live page or repo. Badge <span class="badge">frames + transcript</span> means frames and transcript only.</p>
+</div>
+
+<div class="box">
+  <h2>Corrections from version 1</h2>
+  <ul>
+    <li class="fix">#13: the film is <strong>80 seconds</strong>, not 8 seconds. The on-screen label says "80-second film". The auto-transcript said "8-second".</li>
+    <li class="fix">#12: the game is photorealistic 3D in first person, not a simple browser game.</li>
+    <li class="fix">#3: the film is a montage of science and nature patterns, with a small orange box character. Version 1 guessed a story film.</li>
+    <li class="fix">#1: the lab is photorealistic 3D, with a brass lens cutaway on an optical bench and a tabletop diorama.</li>
+    <li class="fix">#6: build time on screen is ~1h 37m. #1: on screen, "One shot · 1h 26m" and "$25.66 API cost".</li>
+    <li class="fix">#10: the character on screen is "Toadly". The transcript spelled it "Toadley".</li>
+  </ul>
+</div>
+
+<div class="box">
+  <h2>Index</h2>
+  <table>
+    <tr><th>#</th><th>Original</th><th>Variation</th></tr>
+    <tr><td>15</td><td>Sand-art film, 250 years of US history</td><td><a href="#b15">Sand-art film, the Silk Road 130 BCE–1453 CE</a></td></tr>
+    <tr><td>14</td><td>New Zealand trip in acrylic marker</td><td><a href="#b14">Japan rail trip in acrylic marker</a></td></tr>
+    <tr><td>13</td><td>Glass-tile mosaic, sea, day into night</td><td><a href="#b13">Glass-tile mosaic, meadow, spring into winter</a></td></tr>
+    <tr><td>12</td><td>Multiplayer lawn mowing, beers and cigars</td><td><a href="#b12">Multiplayer snow clearing, cocoa and thermoses</a></td></tr>
+    <tr><td>11</td><td>Pencil sketch to 3D trebuchet</td><td><a href="#b11">Pencil sketch to 3D stone arch bridge</a></td></tr>
+    <tr><td>10</td><td>One-shot kart racer</td><td><a href="#b10">One-shot jet-ski racer</a></td></tr>
+    <tr><td>9</td><td>Antikythera mechanism game</td><td><a href="#b9">Rosetta Stone game</a></td></tr>
+    <tr><td>8</td><td>Pure-code pixel-art wizard</td><td><a href="#b8">Pure-code pixel-art dragon</a></td></tr>
+    <tr><td>7</td><td>Procedural Blender castle on a lake</td><td><a href="#b7">Procedural Blender lighthouse in a storm</a></td></tr>
+    <tr><td>6</td><td>"The Minecraft Test"</td><td><a href="#b6">"The Volcano Test"</a></td></tr>
+    <tr><td>5</td><td>Dark Souls-style castle game</td><td><a href="#b5">Soulslike snowbound monastery game</a></td></tr>
+    <tr><td>4</td><td>One-prompt motion showreel</td><td><a href="#b4">One-prompt film title sequence</a></td></tr>
+    <tr><td>3</td><td>Short film in code: nature patterns</td><td><a href="#b3">Short film in code: water and weather patterns</a></td></tr>
+    <tr><td>2</td><td>Clawd music video, P(doom) song</td><td><a href="#b2">Clawd music video, Opus-composed sea shanty</a></td></tr>
+    <tr><td>1</td><td>Lens Lab, how camera focus works</td><td><a href="#b1">Eye Lab, how the human eye focuses</a></td></tr>
+  </table>
+</div>
+
+<!-- 15 -->
+<section class="box" id="b15">
+  <h2><span class="rank">#15</span>The Silk Road in Sand <span class="badge">frames + transcript</span></h2>
+  <p class="by">Original by Michael Guo (@Michaelzsguo)</p>
+  <h3>Original</h3>
+  <p class="orig">A 2-minute sand animation of 250 years of American history. One prompt, no edits. Opus wrote its own soundtrack: a medley of classic American songs, composed and rendered in code.</p>
+  <h3>Look (from frames)</h3>
+  <ul class="orig">
+    <li>Warm sepia sand on a backlit table, with fine grain.</li>
+    <li>Scenes are dark sand silhouettes: sunrise with rays, mountains, a steam train, an island.</li>
+    <li>A serif year and subtitle in the top-left corner, for example "1869 / Coast to Coast".</li>
+    <li>Transitions: sand blows away sideways in streaks, then the next scene forms.</li>
+  </ul>
+  <h3>Variation</h3>
+  <p class="var"><strong>A 2-minute sand animation of about 1,600 years of the Silk Road, 130 BCE to 1453 CE.</strong> The soundtrack is a medley of traditional melodies from cultures along the route.</p>
+  <h3>Keeps</h3>
+  <ul><li>The sepia sand look, the silhouettes, the serif year labels, and the wind-blown transitions.</li><li>Length 2 minutes. One prompt, no edits.</li><li>Soundtrack composed and rendered in code, without audio files.</li></ul>
+  <h3>Prompt</h3>
+<pre>Make a 2-minute sand animation of the Silk Road, from 130 BCE to 1453 CE.
+Draw every scene as dark sand silhouettes on a warm, backlit sepia sand table.
+Add fine sand grain to the whole image.
+Show camel caravans, Chang'an, the Taklamakan Desert, Samarkand, Baghdad, Venice, and Constantinople.
+Put a serif year and a short subtitle in the top-left corner of each scene.
+Between scenes, blow the sand away sideways in streaks. Then form the next scene from the sand.
+Write your own soundtrack: a medley of traditional melodies from cultures along the route.
+Use only public-domain traditional tunes.
+Compose and render the music in code.
+Put everything in one HTML file.</pre>
+  <h3>Needs</h3>
+  <p>Only a browser.</p>
+  <h3>Check</h3>
+  <ul><li>The film runs 2:00. The years show in ascending order.</li><li>Music plays with no audio file in the folder.</li><li>You sent one prompt and made no edits.</li></ul>
+</section>
+
+<!-- 14 -->
+<section class="box" id="b14">
+  <h2><span class="rank">#14</span>Japan Rail Sketchbook <span class="badge">frames + transcript</span></h2>
+  <p class="by">Original by Ann Nguyen (@ann_nnng)</p>
+  <h3>Original</h3>
+  <p class="orig">Ann gave Opus her photos from New Zealand. Opus redrew each one in an acrylic marker style. Then it bound the drawings into a sketchbook you can flip through. All JavaScript.</p>
+  <h3>Look (from frames)</h3>
+  <ul class="orig">
+    <li>An open sketchbook, two pages wide. The drawing fills the spread.</li>
+    <li>Flat, bright, naive illustration: blue sky, white clouds, green hills, sheep, cherry blossom, people in ski goggles, a night sky with the Milky Way.</li>
+    <li>Short visible marker strokes give texture to grass, trees, and flowers.</li>
+    <li>The original photo shows as a small print in the bottom-right corner of the page.</li>
+    <li>A small handwritten caption under the drawing. The page turns with a curl.</li>
+    <li>A "TypingMind" logo shows at the top-left of the page. The tool used may be TypingMind.</li>
+  </ul>
+  <h3>Variation</h3>
+  <p class="var"><strong>A Japan rail trip, redrawn in acrylic marker style, bound into a flip-through sketchbook.</strong> Each caption is a station or place name.</p>
+  <h3>Keeps</h3>
+  <ul><li>Your own photos as the input. The people in the photos are redrawn too.</li><li>The flat, bright, textured marker look. The small photo print in the corner. The page curl.</li><li>All JavaScript.</li></ul>
+  <h3>Prompt</h3>
+<pre>Read every image in the photos/ folder.
+Redraw each photo as a flat, bright acrylic paint-marker illustration.
+Use opaque fills and short visible marker strokes for grass, trees, and flowers.
+Redraw every person in the photos in the same style.
+Make the drawings with canvas code. Do not call an image-generation model.
+Bind the drawings into an open sketchbook. Each drawing fills a two-page spread.
+Show the original photo as a small print in the bottom-right corner of each spread.
+Write a small handwritten caption under each drawing. Use the file name as the caption.
+Turn pages with a page-curl animation, on mouse drag and on the arrow keys.
+Write it all in JavaScript. Put it in one HTML file.</pre>
+  <h3>Needs</h3>
+  <p>A <code>photos/</code> folder with 10–20 JPG photos of the trip. Name each file after the place, for example <code>kyoto-station.jpg</code>. You supply these later.</p>
+  <h3>Check</h3>
+  <ul><li>Each photo has one spread and one corner print. The pages curl on drag and on arrow keys.</li><li>You can recognize each person and each place in the drawings.</li></ul>
+  <p class="note">Unknown: the frames do not show how the drawings were made. They look hand-painted, so an image model may have made them. "Canvas code, no image model" is my reading of "All JavaScript". If the canvas result is too plain, remove that line.</p>
+</section>
+
+<!-- 13 -->
+<section class="box" id="b13">
+  <h2><span class="rank">#13</span>Four Seasons in Glass <span class="badge">frames + transcript</span></h2>
+  <p class="by">Original by Chris Riley (@LCSlates)</p>
+  <h3>Original</h3>
+  <p class="orig">An 80-second WebGL2 film made of glass tiles: fish, cranes, and doves, from day into night. One HTML file, no libraries, no images, Opus alone. On-screen label: "0 libraries · 0 media files".</p>
+  <h3>Look (from frames)</h3>
+  <ul class="orig">
+    <li>A square mosaic panel with a dark border of colored tiles, like a Roman floor.</li>
+    <li>Gold and cream tile background. An orange sun. Blue and teal waves in a band at the bottom.</li>
+    <li>The animals are made of tiles. They break into loose tiles, fly, and form again.</li>
+    <li>Each tile is a small 3D piece with its own shine and shadow.</li>
+  </ul>
+  <h3>Variation</h3>
+  <p class="var"><strong>An 80-second glass-tile film of a mountain meadow that moves from spring into winter.</strong> Bees, maple leaves, a deer, and snowflakes form from the tiles and break apart again.</p>
+  <h3>Keeps</h3>
+  <ul><li>The framed square mosaic panel, the 3D tiles, and the break-apart-and-reform motion.</li><li>Length 80 seconds. A slow change of time across the film.</li><li>WebGL2 in one HTML file, without libraries or media files.</li></ul>
+  <h3>Prompt</h3>
+<pre>Make an 80-second WebGL2 film made of glass mosaic tiles.
+Show one square mosaic panel with a dark border of colored tiles, like a Roman floor.
+Show a mountain meadow that moves from spring into winter.
+Make bees, falling maple leaves, a deer, and snowflakes out of tiles.
+Let each figure break into loose tiles, fly, and form again in a new place.
+Make each tile a small 3D piece with its own shine and shadow.
+Change the background tile colors with each season.
+Use one HTML file. Use no libraries and no media files.</pre>
+  <h3>Needs</h3>
+  <p>Only a browser.</p>
+  <h3>Check</h3>
+  <ul><li>The film runs 80 seconds and shows four seasons in order.</li><li>The figures break into tiles and form again.</li><li>The file has no <code>&lt;script src&gt;</code>, no <code>&lt;img&gt;</code>, and no media URLs.</li></ul>
+</section>
+
+<!-- 12 -->
+<section class="box" id="b12">
+  <h2><span class="rank">#12</span>Neighborhood Snow Day <span class="badge">frames + transcript</span></h2>
+  <p class="by">Original by Max Blade (@_MaxBlade)</p>
+  <h3>Original</h3>
+  <p class="orig">A multiplayer lawn-mowing simulator with beers and cigars. Max put it live on his server. His stream chat joined and mowed together.</p>
+  <h3>Look (from frames)</h3>
+  <ul class="orig">
+    <li>Photorealistic 3D, in first person. The player's hands hold the wheel and a beer bottle.</li>
+    <li>Many players on vintage ride-on lawn tractors, in front of an English country house.</li>
+    <li>Long grass. The mower leaves light and dark stripes. Low sun, soft light.</li>
+    <li>A minimap in the bottom-right corner. Player chat text shows in the middle of the screen.</li>
+  </ul>
+  <h3>Variation</h3>
+  <p class="var"><strong>A multiplayer snow-clearing simulator with hot cocoa and thermoses.</strong> Players ride vintage snowblowers and clear the long drive of an alpine hotel while snow keeps falling.</p>
+  <h3>Keeps</h3>
+  <ul><li>Photorealistic first person, vintage ride-on machines, a grand building in the background.</li><li>Comic props in the player's hand. A minimap. Chat text on screen.</li><li>Many players in one world, live on a server. Players join from a link.</li></ul>
+  <h3>Prompt</h3>
+<pre>Make a photorealistic multiplayer snow-clearing simulator in first person.
+Put all players on vintage ride-on snowblowers in front of a grand alpine hotel.
+Show the player's hands on the wheel, and a mug of hot cocoa or a thermos in one hand.
+Cover the ground in deep snow. Let the snowblower cut clean lanes and throw a snow plume.
+Let slow snowfall cover cleared lanes again.
+Add a minimap in the bottom-right corner and chat text in the middle of the screen.
+Sync all players through a server so that each player sees the others' cleared lanes.
+Let a player join with a name from one link.
+Write a README with the commands to deploy it on my server.</pre>
+  <h3>Needs</h3>
+  <p>A server that you control, with a public URL. Deploying is a separate step. This spec does not deploy.</p>
+  <h3>Check</h3>
+  <ul><li>Open two clients. A lane that one player clears shows in the other client in less than 1 second.</li><li>A third player can join from the link while the game runs.</li></ul>
+  <p class="note">Unknown: the frames do not show the engine. The image quality looks like a game engine, not plain browser code. The prompt lets Opus choose. Name an engine in the prompt if you want one.</p>
+</section>
+
+<!-- 11 -->
+<section class="box" id="b11">
+  <h2><span class="rank">#11</span>Sketch to 3D Arch Bridge <span class="badge">frames + transcript</span></h2>
+  <p class="by">Original by Ben Poole (@poolio)</p>
+  <h3>Original</h3>
+  <p class="orig">Ben sketched a trebuchet on paper with a pencil. Opus turned it into a working 3D simulation with real ballistics. Change the weight, change the angle, and watch the tower come down. On-screen title: "Paper Trebuchet".</p>
+  <h3>Look (from frames)</h3>
+  <ul class="orig">
+    <li>A sheet of paper on a wooden desk, in soft sunlight with window shadows. A pencil and an eraser lie on the paper.</li>
+    <li>The sketch lines lift off the paper into 3D. The trebuchet and a tower of blocks stand up as pencil-line objects.</li>
+    <li>A dashed arc shows the throw path.</li>
+    <li>Later the objects change from pencil lines into solid wood and cardboard.</li>
+  </ul>
+  <h3>Variation</h3>
+  <p class="var"><strong>A pencil sketch of a stone arch bridge, turned into a 3D simulation with real rigid-body physics.</strong> Change the cart load or the arch rise, or pull the keystone. Watch the bridge hold or fall.</p>
+  <h3>Keeps</h3>
+  <ul><li>Paper on a wooden desk. Sketch lines that lift into 3D, then turn solid.</li><li>A working 3D simulation with real physics and sliders.</li><li>A visible collapse.</li></ul>
+  <h3>Prompt</h3>
+<pre>Read my pencil sketch in sketch/arch-bridge.jpg.
+Show the sketch on a sheet of paper on a wooden desk, in soft sunlight. Put a pencil and an eraser on the paper.
+Lift the sketch lines off the paper into a 3D stone arch bridge drawn in pencil lines.
+Then turn the pencil-line bridge into solid stone blocks.
+Give each block real rigid-body physics.
+Add a cart that rolls across the bridge. Show its path as a dashed line.
+Add sliders for cart mass, arch rise, and block friction.
+Add a button that removes the keystone.
+Let the bridge hold or collapse from the physics alone. Do not script the collapse.
+Let me orbit the camera.</pre>
+  <h3>Needs</h3>
+  <p>A photo of your pencil sketch at <code>sketch/arch-bridge.jpg</code>.</p>
+  <h3>Check</h3>
+  <ul><li>The lines lift from the paper, then turn to stone.</li><li>With default values, the cart crosses and the bridge holds.</li><li>With the keystone removed, the arch falls.</li></ul>
+  <p class="note">Unknown: the frames do not show the 3D or physics library. The prompt lets Opus choose.</p>
+</section>
+
+<!-- 10 -->
+<section class="box" id="b10">
+  <h2><span class="rank">#10</span>Wave Racer <span class="badge">frames + transcript</span></h2>
+  <p class="by">Original by BridgeMind (@bridgemindai)</p>
+  <h3>Original</h3>
+  <p class="orig">A full kart racer from one prompt, named "Turbo Kart Rally": characters, tracks, item boxes, lap times. Opus renamed the characters to Blaze, Zippy, and Toadly.</p>
+  <h3>Look (from frames)</h3>
+  <ul class="orig">
+    <li>Bright cartoon 3D with low-poly hills and trees. A glossy orange-and-blue title logo.</li>
+    <li>A "Choose your racer" screen: a grid of 8 characters with icons and stat bars, a class setting ("100cc · Normal"), a lap count ("3 laps"), and an orange "Race!" button.</li>
+    <li>A track title card, for example "Palm Cove Circuit". Grandstands, checkered arches, sponsor banners.</li>
+    <li>HUD: an item slot at top center, a minimap on the left, a speedometer and a race position ("5th") at bottom right.</li>
+  </ul>
+  <h3>Variation</h3>
+  <p class="var"><strong>A full jet-ski racer from one prompt.</strong> Characters, water tracks with waves and buoys, floating item crates, and lap times.</p>
+  <h3>Keeps</h3>
+  <ul><li>One prompt. A complete racing game in the browser.</li><li>The bright cartoon 3D look, the character select screen, the track title cards, the same HUD layout.</li><li>Opus invents the character names and avoids trademarked characters.</li></ul>
+  <h3>Prompt</h3>
+<pre>Make a full jet-ski racing game in the browser, in the style of 1990s console water racers.
+Use bright cartoon 3D with low-poly islands and palm trees. Make a glossy title logo.
+Add a "Choose your racer" screen with 8 characters, stat bars, a class setting, a lap count, and a Race button.
+Add at least 3 water tracks with waves, buoys, and ramps. Show a title card for each track.
+Add floating item crates with boosts and power-ups.
+Show an item slot at top center, a minimap, a speedometer, and the race position.
+Add AI opponents, a lap counter, and lap times.
+Invent original names for all characters. Do not use any trademarked character.</pre>
+  <h3>Needs</h3>
+  <p>Only a browser.</p>
+  <h3>Check</h3>
+  <ul><li>A full race finishes and shows lap times.</li><li>Items from the crates change the race.</li><li>No character name matches a trademarked character.</li></ul>
+</section>
+
+<!-- 9 -->
+<section class="box" id="b9">
+  <h2><span class="rank">#9</span>The Rosetta Stone <span class="badge">frames + transcript</span></h2>
+  <p class="by">Original by edwin (@edwinarbus)</p>
+  <h3>Original</h3>
+  <p class="orig">A game about the Antikythera mechanism. You dive down to a shipwreck and uncover the world's first computer. Every image and every sound is generated live from code, all in one 3-megabyte HTML file.</p>
+  <h3>Look (from frames)</h3>
+  <ul class="orig">
+    <li>Cinematic, near-photorealistic 3D. A diver in a copper standard diving helmet and suit.</li>
+    <li>Deep blue water, light rays from above, bubbles, fish, a sandy seabed, wreck timbers.</li>
+    <li>An objective at the top-left ("Find the three bronze fragments") and a timer at top center.</li>
+    <li>Each find shows a serif caption with a fact, for example "127 TEETH / Beside it, ΣΕΛΗΝΗ: Greek for the Moon."</li>
+    <li>The end scene: a sailing boat on a dark sea under the moon.</li>
+  </ul>
+  <h3>Variation</h3>
+  <p class="var"><strong>A game about the Rosetta Stone.</strong> You dig at Rashid (Rosetta), Egypt, in 1799 and uncover the stone. Then you decode Ptolemy's cartouche, as Champollion did in 1822.</p>
+  <h3>Keeps</h3>
+  <ul><li>Cinematic 3D, a period-dressed hero, an objective, a timer, serif fact captions, a quiet end scene.</li><li>Every image and sound generated live from code.</li><li>One self-contained HTML file of about 3 MB.</li></ul>
+  <h3>Prompt</h3>
+<pre>Make a game about the Rosetta Stone in one HTML file.
+Use cinematic, near-photorealistic 3D.
+Start at a dig site near Rashid, Egypt, in 1799, at dusk. Add dust in the air, lantern light, and long shadows.
+Let the player be a soldier in a 1799 French uniform, digging in the ruins of a fort.
+Show an objective at top-left: "Uncover the three scripts." Show a timer at top center.
+When the player finds each script, show a serif caption with one fact about it.
+Then let the player decode Ptolemy's cartouche: match Greek letters to hieroglyph signs.
+End on a ship at night on the Mediterranean, with the stone on deck under the moon.
+Generate every image and every sound live from code.
+Load no external files. Keep the file near 3 MB.</pre>
+  <h3>Needs</h3>
+  <p>Only a browser.</p>
+  <h3>Check</h3>
+  <ul><li>The file is about 3 MB and makes 0 network requests after load.</li><li>A player can finish the decode puzzle.</li><li>The facts are correct. Check the dates 1799 and 1822 and the line counts of the three scripts.</li></ul>
+</section>
+
+<!-- 8 -->
+<section class="box" id="b8">
+  <h2><span class="rank">#8</span>Pixel-Art Dragon <span class="badge">frames + transcript</span></h2>
+  <p class="by">Original by Majid Manzarpour (@majidmanzarpour)</p>
+  <h3>Original</h3>
+  <p class="orig">A small pixel-art wizard made with pure code. He idles, charges up, and casts a spell with particles, screen shake, and a 24-color palette. It looks hand-animated. It is not.</p>
+  <h3>Look (from frames)</h3>
+  <ul class="orig">
+    <li>A night scene: deep indigo-to-purple sky, small stars, a large pale pixel moon.</li>
+    <li>The wizard stands on a gray stone-brick wall. He has a red robe, a pointed hat, a white beard, and a staff with a blue crystal.</li>
+    <li>The spell is blue and violet particles at the staff tip, with a glow on the stones.</li>
+    <li>Large, crisp pixels. The character is small in the frame.</li>
+  </ul>
+  <h3>Variation</h3>
+  <p class="var"><strong>A small pixel-art dragon made with pure code.</strong> It idles, breathes in, and breathes fire, on the same kind of night wall.</p>
+  <h3>Keeps</h3>
+  <ul><li>The night sky, the moon, the stone wall, and the small character in large pixels.</li><li>Three states: idle, charge, action. Particles, screen shake, a 24-color palette.</li><li>Pure code, without sprite sheets.</li></ul>
+  <h3>Prompt</h3>
+<pre>Make a small pixel-art dragon with pure code. Use no sprite sheets and no images.
+Use a fixed 24-color palette and large, crisp pixels.
+Set it at night: an indigo-to-purple sky, small stars, and a large pale moon.
+Put the dragon on a gray stone-brick castle wall. Keep the dragon small in the frame.
+Animate three states in a loop: idle, charge, and fire breath.
+Idle: the dragon breathes, blinks, and moves its tail.
+Charge: the dragon breathes in and its chest glows orange.
+Fire breath: fire particles, embers, orange light on the stones, and screen shake.
+Make the motion look hand-animated, frame by frame.
+Put it in one HTML file.</pre>
+  <h3>Needs</h3>
+  <p>Only a browser.</p>
+  <h3>Check</h3>
+  <ul><li>The page shows all three states in order.</li><li>Count the colors on a screenshot: 24 or fewer.</li></ul>
+</section>
+
+<!-- 7 -->
+<section class="box" id="b7">
+  <h2><span class="rank">#7</span>Procedural Storm Lighthouse <span class="badge">frames + transcript</span></h2>
+  <p class="by">Original by Stefan 3D AI (@Stefan_3D_AI)</p>
+  <h3>Original</h3>
+  <p class="orig">Stefan gave Opus one prompt and control of Blender. 35 minutes later there was a castle on a lake, with fireworks. Fully procedural, about $13 in tokens. Opus also recorded its own build time-lapse.</p>
+  <h3>Look (from frames)</h3>
+  <ul class="orig">
+    <li>The time-lapse is in gray clay render: mountains, then a lake, then the castle grows step by step.</li>
+    <li>An "Opus 5.5" badge sits at top center of the time-lapse.</li>
+    <li>The castle is a fairy-tale castle with white walls and blue cone roofs, on an island.</li>
+    <li>The final shot: night, dark mountains, a still lake with reflections, lit windows, fireworks, and a shooting-star arc.</li>
+    <li>A serif title "STEFAN 3D AI" over the lake, like a film studio intro.</li>
+  </ul>
+  <h3>Variation</h3>
+  <p class="var"><strong>A procedural lighthouse on a sea cliff at dusk, as a storm arrives.</strong> The beam turns, waves hit the rocks, and lightning replaces the fireworks.</p>
+  <h3>Keeps</h3>
+  <ul><li>One prompt. Opus controls Blender. Fully procedural.</li><li>A gray-clay build time-lapse with an "Opus 5.5" badge. A final hero shot with a serif title.</li><li>Targets: about 35 minutes, about $13.</li></ul>
+  <h3>Prompt</h3>
+<pre>Build a scene in Blender with procedural methods only. Import no models and no textures.
+Make a lighthouse on a sea cliff at dusk, with a storm that arrives.
+Add a turning light beam, waves that hit the rocks, rain, and lightning flashes.
+Add a small keeper's house with lit windows.
+After each build step, save a viewport screenshot in gray clay shading.
+Put an "Opus 5.5" badge at top center of each screenshot.
+Join the screenshots into a build time-lapse video.
+End with a hero shot: the storm at night, the beam across the sea, and a lightning strike.
+Put a serif title over the hero shot, like a film studio intro.
+Render the final animation.</pre>
+  <h3>Needs</h3>
+  <p>Blender, and a connection that lets Claude Code control Blender (a Blender MCP server). This session lists <code>bl_*</code> tools from <code>higgsfield-bridge</code>. I did not test them. Tell me the title text for the hero shot, or let Opus choose.</p>
+  <h3>Check</h3>
+  <ul><li>A clay time-lapse and a final render exist.</li><li>The <code>.blend</code> file has no linked or imported assets.</li><li>Compare build time and cost with 35 minutes and $13.</li></ul>
+</section>
+
+<!-- 6 -->
+<section class="box" id="b6">
+  <h2><span class="rank">#6</span>"The Volcano Test" <span class="badge">frames + transcript</span></h2>
+  <p class="by">Original by Noah Wachnik (@noahwachnik)</p>
+  <h3>Original</h3>
+  <p class="orig">Noah calls it "the Minecraft test". Shaders, water physics, and a full day-night cycle, all in the browser. On screen: "Built in ~1h 37m". His quote on screen: "By far the most INSANE result I've ever seen from an LLM."</p>
+  <h3>Look (from frames)</h3>
+  <ul class="orig">
+    <li>Voxel blocks with a heavy shader look: reflective turquoise water, soft shadows, sun rays, bloom.</li>
+    <li>A golden sunset with long shadows. Torches glow at night.</li>
+    <li>Sand beaches, a round island, snowy mountains with forests, blue sky with voxel clouds.</li>
+    <li>A hotbar of block types at the bottom center.</li>
+  </ul>
+  <h3>Variation</h3>
+  <p class="var"><strong>A voxel volcanic island in the browser.</strong> Lava and water both flow. When lava touches water, it cools into obsidian. The volcano erupts on a timer.</p>
+  <h3>Keeps</h3>
+  <ul><li>A voxel world that the player can mine and build in, with a hotbar.</li><li>The heavy shader look, fluid physics, and a full day-night cycle.</li><li>All in the browser. Target: about 1h 37m of build time.</li></ul>
+  <h3>Prompt</h3>
+<pre>Make a voxel sandbox game in the browser on a volcanic island.
+Let the player walk, mine blocks, and place blocks. Show a hotbar at the bottom center.
+Add water and lava that flow block by block.
+When lava touches water, turn the lava into obsidian.
+Make the volcano erupt on a timer and send lava down its sides.
+Use heavy shaders: reflective water, soft shadows, sun rays, bloom, and a glow from the lava.
+Add black-sand beaches, palm trees, and ash clouds.
+Add a full day-night cycle with sunset, moon, and stars.</pre>
+  <h3>Needs</h3>
+  <p>Only a browser.</p>
+  <h3>Check</h3>
+  <ul><li>Pour water on flowing lava. Obsidian appears.</li><li>A full day-night cycle completes. The lava glows at night.</li><li>Record the build time. Compare it with ~1h 37m.</li></ul>
+</section>
+
+<!-- 5 -->
+<section class="box" id="b5">
+  <h2><span class="rank">#5</span>Frostbound Monastery <span class="badge">frames + transcript</span></h2>
+  <p class="by">Original by Alex (@The_Alex)</p>
+  <h3>Original</h3>
+  <p class="orig">A Dark Souls-style game that runs in the browser, titled "The Ashen Gate". Stone castles, a health bar, ember altars where you rest. The enemies come back when you rest. On-screen labels: "Health bar · stamina · flasks" and "Ember altars — enemies respawn".</p>
+  <h3>Look (from frames)</h3>
+  <ul class="orig">
+    <li>Near-photorealistic sandstone castle: courtyards, arches, heavy wooden gates, a bridge.</li>
+    <li>Third-person camera behind a knight with a red cross shield.</li>
+    <li>A title screen with a serif logo and a menu (New Game, Controls, Quit).</li>
+    <li>Area names in large serif capitals on arrival, for example "Ashen Sanctuary" and "The Warden's Bridge".</li>
+    <li>The ember altar is a stone basin with fire and a sword in it.</li>
+    <li>HUD: health and stamina bars at top-left, a flask count at bottom-left, a currency count at bottom-right. Enemies return in a burst of ash.</li>
+  </ul>
+  <h3>Variation</h3>
+  <p class="var"><strong>A soulslike game in a snowbound mountain monastery.</strong> Stone cloisters, bell towers, and lantern shrines where you rest. The enemies come back when you rest.</p>
+  <h3>Keeps</h3>
+  <ul><li>Near-photorealistic stone, third-person knight, serif title screen and area names.</li><li>Health, stamina, flasks, a currency count, and rest points.</li><li>Resting brings defeated enemies back.</li></ul>
+  <h3>Prompt</h3>
+<pre>Make a Dark Souls-style game that runs in the browser.
+Set it in a snowbound mountain monastery: stone cloisters, bell towers, and a rope bridge.
+Use near-photorealistic stone, snow, and cold blue light.
+Use a third-person camera behind a knight with a shield. Add attack, dodge, and block.
+Make a title screen with a serif logo and a menu: New Game, Controls, Quit.
+Show each area name in large serif capitals when the player arrives.
+Show health and stamina bars at top-left, a flask count at bottom-left, and a currency count at bottom-right.
+Add lantern shrines. Resting at a shrine fills health and flasks and saves the checkpoint.
+When the player rests, bring all defeated enemies back in a burst of snow and ash.
+When the player dies, return the player to the last shrine.</pre>
+  <h3>Needs</h3>
+  <p>Only a browser.</p>
+  <h3>Check</h3>
+  <ul><li>Kill an enemy, rest at a shrine. The enemy is back.</li><li>Die. You return to the last shrine.</li><li>Each area shows its name on arrival.</li></ul>
+</section>
+
+<!-- 4 -->
+<section class="box" id="b4">
+  <h2><span class="rank">#4</span>One-Prompt Title Sequence <span class="badge">frames + transcript</span></h2>
+  <p class="by">Original by Stephan Livera (@stephanlivera)</p>
+  <h3>Original</h3>
+  <p class="orig">One prompt on max effort: "Make a 15-second show reel like you're a motion designer and go all out." The result started a trend of people running the exact same prompt.</p>
+  <h3>Look (from frames)</h3>
+  <ul class="orig">
+    <li>A frame with corner crop marks, small monospace labels, and a timecode, like a camera viewfinder.</li>
+    <li>An orange starburst logo that spins inside circles of small text.</li>
+    <li>A full orange card with heavy black capitals "CLAUDE" and an italic serif line "motion designer".</li>
+    <li>A cream card with fast colored shapes and motion blur. A white square on black. A grid of dots.</li>
+    <li>Giant blue capitals "EASE" on cream.</li>
+    <li>Colors: black, orange, cream, and electric blue.</li>
+  </ul>
+  <h3>Variation</h3>
+  <p class="var"><strong>The same prompt, with a new role: a film title designer who makes a 15-second title sequence.</strong></p>
+  <h3>Keeps</h3>
+  <ul><li>One short prompt. The prompt is the whole spec.</li><li>Length 15 seconds. Max effort.</li><li>A creative role and "go all out".</li></ul>
+  <h3>Prompt</h3>
+<pre>Make a 15-second title sequence like you're a film title designer and go all out.</pre>
+  <h3>Needs</h3>
+  <p>Set the effort level to max before you send the prompt.</p>
+  <h3>Check</h3>
+  <ul><li>The output runs 15 seconds.</li><li>You sent one prompt and nothing more.</li></ul>
+  <p class="note">Do not add the look to this prompt. The original look came from Opus, not from the prompt. The look list is here only to compare your result.</p>
+</section>
+
+<!-- 3 -->
+<section class="box" id="b3">
+  <h2><span class="rank">#3</span>Water and Weather, in Code <span class="badge">frames + transcript</span></h2>
+  <p class="by">Original by DreW (@devteamdrew)</p>
+  <h3>Original</h3>
+  <p class="orig">Drew made a short film entirely in code with Claude. No framework, no editing app. He had Opus rework the soundtrack a few times until it used real instrument sounds. 1.78M views on screen.</p>
+  <h3>Look (from frames)</h3>
+  <ul class="orig">
+    <li>A montage of short scenes. Each scene shows one pattern from science or nature.</li>
+    <li>A small orange box character with dot eyes and stubby legs, on textured off-white paper.</li>
+    <li>Planets and orbits around a glowing center. White light through a glass prism. A rainbow DNA double helix on navy.</li>
+    <li>A sunflower with its seed spiral on a peach background. A flock of starlings on a dusk gradient.</li>
+    <li>Flat vector shapes with soft gradients and clean edges.</li>
+  </ul>
+  <h3>Variation</h3>
+  <p class="var"><strong>A short film of patterns in water and weather.</strong> A small paper boat is the linking character, like the orange box in the original.</p>
+  <h3>Keeps</h3>
+  <ul><li>A montage of pattern scenes, flat vector style, one small linking character.</li><li>Entirely in code, without a framework or an editing app.</li><li>A soundtrack that Opus reworks until it sounds like real instruments.</li></ul>
+  <h3>Prompt</h3>
+<pre>Make a short film entirely in code. Use no framework and no editing app.
+Make it a montage of short scenes. Each scene shows one pattern in water or weather.
+Use flat vector shapes, soft gradients, and clean edges. Give each scene its own background color.
+Add a small paper boat as the character that links the scenes.
+Scenes: a snowflake that grows with six-fold symmetry, rain ripples that overlap,
+a rainbow from light in a raindrop, lightning that branches, a hurricane spiral from above,
+and a river that bends into meanders.
+Write a soundtrack for piano and cello in code.
+Put the film and the music in one HTML file.</pre>
+  <h3>Follow-up prompt (repeat until the music passes)</h3>
+<pre>The instruments sound synthetic. Rework the soundtrack so the piano and cello sound like real instruments.</pre>
+  <h3>Needs</h3>
+  <p>Only a browser.</p>
+  <h3>Check</h3>
+  <ul><li>The film shows all six scenes with the paper boat in each one.</li><li>The piano and cello sound like real instruments to your ear.</li></ul>
+  <p class="note">Unknown: the frames do not show the film length. The prompt lets Opus choose.</p>
+</section>
+
+<!-- 2 -->
+<section class="box" id="b2">
+  <h2><span class="rank">#2</span>Clawd Goes to Sea <span class="badge live">frames + live source</span></h2>
+  <p class="by">Original by NotinReality (@other__reality) · source: <a href="https://github.com/JohnHeibel/PDoomVideo">github.com/JohnHeibel/PDoomVideo</a></p>
+  <h3>Original</h3>
+  <p class="orig">A full 2.5-minute music video that stars Clawd, set to the song "I'm Upping My P(doom)". Opus got the lyrics and the audio. It then started seven subagents that wrote every scene in parallel, in painted brush strokes. About 45 minutes. Details from the repo:</p>
+  <ul class="orig">
+    <li><code>studio.html</code> paints with p5.js and p5.brush.</li>
+    <li><code>src/ch/</code> holds nine chapter files.</li>
+    <li>Opus wrote <code>ANIMATION_GUIDE.md</code> to brief its subagents.</li>
+    <li>Opus wrote <code>STORYBOARD.md</code> for the shot plan.</li>
+    <li><code>render.mjs</code> renders frames in headless Chrome and encodes MP4 with ffmpeg.</li>
+    <li>The timeline is 156.6 seconds.</li>
+  </ul>
+  <h3>Look (from frames)</h3>
+  <ul class="orig">
+    <li>Flat cartoon shapes with a painted texture. Soft lavender, pink, and warm wood colors.</li>
+    <li>Clawd is an orange block with dot eyes and stubby legs. A small scientist in a white lab coat is the second character.</li>
+    <li>Each scene is a visual joke on a lyric line: a door with teeth, a heart-shaped cage, a mountain of paperclips, a P(doom) thermometer.</li>
+    <li>Comic sound words in big yellow letters, for example "PLOP".</li>
+    <li>Red stage curtains frame some scenes.</li>
+    <li>Karaoke captions in a dark bar at the bottom. The current words turn yellow.</li>
+  </ul>
+  <h3>Variation</h3>
+  <p class="var"><strong>A 2.5-minute music video that stars Clawd, set to a sea shanty that Opus writes and composes in code.</strong> Clawd and the scientist join a ship's crew, ride out a storm, and see land.</p>
+  <h3>Keeps</h3>
+  <ul><li>Clawd and the scientist. Flat painted cartoon look (p5.js + p5.brush). A visual joke for each lyric line. Karaoke captions.</li><li>Seven subagents write scenes in parallel from a guide and a storyboard.</li><li>Same render pipeline: headless Chrome frames, then ffmpeg to MP4. Target: about 45 minutes.</li></ul>
+  <h3>Prompt</h3>
+<pre>Write the lyrics for a 2.5-minute sea shanty about Clawd.
+Clawd and a small scientist in a white lab coat join a ship's crew, ride out a storm, and see land.
+Compose the music in code: fiddle, concertina, bass drum, and foot stomps.
+Render the music to assets/shanty.wav.
+Write STORYBOARD.md. Give each lyric line one visual joke.
+Write ANIMATION_GUIDE.md. Tell subagents how to draw Clawd: an orange block with dot eyes and stubby legs.
+Paint flat cartoon shapes with a painted texture, using p5.js and p5.brush in studio.html.
+Add comic sound words in big yellow letters.
+Show karaoke captions in a dark bar at the bottom. Turn the current words yellow.
+Start seven subagents. Give each subagent one part of the song. Let them write their scenes in parallel.
+Make smooth transitions between the parts.
+Write render.mjs: render frames in headless Chrome, then encode an MP4 with ffmpeg.</pre>
+  <h3>Needs</h3>
+  <p>Node.js, Google Chrome, and ffmpeg (the same tools as the original repo). The original render commands were <code>node render.mjs --frames=0:156.6 --workers=4</code> and <code>node render.mjs --encode --out=out/pdoom.mp4</code>.</p>
+  <h3>Check</h3>
+  <ul><li>The MP4 runs about 2.5 minutes and the picture stays in time with the music.</li><li>Seven subagent runs appear in the session log.</li><li>The karaoke words turn yellow in time with the music.</li></ul>
+  <p class="note">Caveat: music composed in code has no sung voice. The original had a sung track. For sung vocals, add a singing or text-to-speech tool. Caveat: the video says seven subagents, and the repo has nine chapter files. Both numbers are kept here.</p>
+</section>
+
+<!-- 1 -->
+<section class="box" id="b1">
+  <h2><span class="rank">#1</span>Eye Lab <span class="badge live">frames + live source</span></h2>
+  <p class="by">Original by Ryan Sael (@RyanSael) · live page: <a href="https://lens.lab.sael.net">lens.lab.sael.net</a> (now redirects to <code>sael.net/plane-of-focus/</code>)</p>
+  <h3>Original</h3>
+  <p class="orig">An interactive lens lab that shows how camera focus works. Turn the focus ring and the glass inside moves while the sharp plane slides through the scene. On screen: "One shot · 1h 26m" and "$25.66 API cost". 3.01M views on screen. Controls from the live page (read through a summary tool, not directly):</p>
+  <ul class="orig">
+    <li>A focus ring that you drag.</li>
+    <li>Presets 1, 2, 3 for foreground, middle, and background.</li>
+    <li>A focus distance. The default is 60 cm.</li>
+    <li>Aperture buttons f/2, f/5.6, and f/16.</li>
+    <li>A toggle between the assembled lens and an exploded view.</li>
+    <li>A console with keyboard shortcuts.</li>
+    <li>Text on the plane of focus, blur, the focus ring, aperture, and image inversion.</li>
+  </ul>
+  <h3>Look (from frames)</h3>
+  <ul class="orig">
+    <li>Near-photorealistic 3D in a dark lab. A camera lens cut in half lies on an optical bench.</li>
+    <li>Brass and black metal parts. The glass elements glow with cyan edges and move when you focus.</li>
+    <li>A tabletop diorama on the bench: low-poly trees, a small cabin, and mountains.</li>
+    <li>A glowing, clear focus plane cuts through the diorama. Parts outside the plane are blurred.</li>
+    <li>A film strip of preset thumbnails at the bottom. Round aperture icons at bottom right. A small control panel at top right.</li>
+    <li>Framed lens diagrams hang on the back wall.</li>
+  </ul>
+  <h3>Variation</h3>
+  <p class="var"><strong>An interactive lab that shows how the human eye focuses.</strong> Tighten the ciliary muscle and the lens gets thicker, while the sharp plane slides through a tabletop diorama.</p>
+  <h3>Keeps</h3>
+  <ul><li>The dark 3D lab, the cutaway on a bench, glowing optics, a tabletop diorama, and the glowing focus plane.</li><li>Three presets, three aperture sizes, an exploded view, a keyboard console, short teaching text.</li><li>One shot. Targets: about 1h 26m, about $26.</li></ul>
+  <h3>Prompt</h3>
+<pre>Build an interactive lab that shows how the human eye focuses.
+Use near-photorealistic 3D in a dark lab. Put a large model of a human eye, cut in half, on an optical bench.
+Make the cornea and the lens glow with cyan edges.
+Put a tabletop diorama on the bench: a desk with a book, a window, and a tree outside.
+Add a drag control for the ciliary muscle. Tightening it makes the lens thicker.
+Show the plane of sharp focus as a glowing, clear plane that moves through the diorama. Blur everything outside it.
+Add presets 1, 2, 3 for the book, the window, and the tree. Show them as a film strip of thumbnails.
+Add pupil sizes 2 mm, 4 mm, and 8 mm. Show how depth of field changes.
+Add a toggle between the assembled eye and an exploded view: cornea, iris, lens, ciliary body, retina.
+Add eye conditions: normal, myopia, hyperopia, presbyopia. Add a corrective-lens toggle.
+Show that the image on the retina is upside down.
+Add a console with keyboard shortcuts.
+Hang framed eye diagrams on the back wall.
+Write short text on focus, blur, the ciliary muscle, pupil size, and image inversion.
+Use standard textbook values and name each value in the text.</pre>
+  <h3>Needs</h3>
+  <p>Only a browser.</p>
+  <h3>Check</h3>
+  <ul><li>Drag the control. The lens gets thicker and the sharp plane moves nearer.</li><li>Pupil 8 mm gives a thinner sharp zone than pupil 2 mm.</li><li>Myopia blurs the tree. The corrective lens makes it sharp.</li><li>Record build time and cost. Compare them with 1h 26m and $25.66.</li></ul>
+</section>
+
+<div class="box">
+  <h2>Assumptions and gaps</h2>
+  <ul>
+    <li>I saw 6 frames per build from the video, not the full builds. Anything outside those clips is unknown.</li>
+    <li>The 15 X post URLs in <code>transcript.txt</code> are cut short. I could not read the posts or the creators' own prompts.</li>
+    <li>The Anthropic announcement link is cut short. I did not read it.</li>
+    <li>Only #4 has a quoted prompt. All other prompts are mine, written from the frames and the transcript.</li>
+    <li>#14 uses a placeholder <code>photos/</code> folder, as you chose. #2 uses an Opus-composed track, as you chose.</li>
+    <li>I picked all 15 subjects. I kept them varied and kept politics out, as you chose.</li>
+  </ul>
+</div>
+
+</main>
+</body>
+</html>

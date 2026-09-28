@@ -1,0 +1,1416 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Volcanic Isle</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#0f172a;color:#e2e8f0;font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
+  canvas{display:block}
+  #hud{position:fixed;top:12px;left:12px;background:rgba(15,23,42,.72);border:1px solid #334155;border-radius:8px;padding:8px 12px;min-width:210px;pointer-events:none}
+  #hud b{color:#fb923c}
+  #hud .m{color:#94a3b8}
+  #hud .t{color:#2dd4bf}
+  #crosshair{position:fixed;left:50%;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;pointer-events:none}
+  #crosshair:before,#crosshair:after{content:"";position:absolute;background:rgba(255,255,255,.85);mix-blend-mode:difference}
+  #crosshair:before{left:8px;top:0;width:2px;height:18px}
+  #crosshair:after{top:8px;left:0;height:2px;width:18px}
+  #hotbar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);display:flex;gap:4px;padding:5px;background:rgba(15,23,42,.72);border:1px solid #334155;border-radius:10px}
+  .slot{position:relative;width:50px;height:50px;border:2px solid #334155;border-radius:6px;background:rgba(30,41,59,.8);display:flex;align-items:center;justify-content:center}
+  .slot.sel{border-color:#fb923c;box-shadow:0 0 10px rgba(251,146,60,.7)}
+  .slot span{position:absolute;left:4px;top:1px;font-size:11px;color:#94a3b8}
+  #blockname{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);color:#e2e8f0;text-shadow:0 1px 3px #000;font-weight:600;opacity:0;transition:opacity .4s;pointer-events:none}
+  #warn{position:fixed;left:50%;top:14%;transform:translateX(-50%);font-size:22px;font-weight:700;color:#fb923c;text-shadow:0 2px 8px #000;pointer-events:none;text-align:center}
+  #overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.55);cursor:pointer}
+  #overlay .card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:22px 28px;max-width:440px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+  #overlay h1{margin:0 0 6px;font-size:26px;color:#fb923c}
+  #overlay p{margin:4px 0;color:#cbd5e1}
+  #overlay kbd{background:#0f172a;border:1px solid #334155;border-radius:4px;padding:0 5px;color:#2dd4bf;font:12px ui-monospace,monospace}
+  #overlay .go{margin-top:14px;color:#2dd4bf;font-weight:700}
+  #err{position:fixed;right:10px;top:10px;max-width:45%;color:#fca5a5;font:12px ui-monospace,monospace;white-space:pre-wrap;pointer-events:none}
+  #test-result{position:fixed;right:10px;bottom:90px;margin:0;background:rgba(15,23,42,.85);border:1px solid #334155;padding:8px;font:12px ui-monospace,monospace;color:#e2e8f0;display:none;max-width:520px;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<div id="hud"></div>
+<div id="crosshair"></div>
+<div id="hotbar"></div>
+<div id="blockname"></div>
+<div id="warn"></div>
+<div id="overlay"><div class="card">
+  <h1>Volcanic Isle</h1>
+  <p>A voxel sandbox on an active volcano. Lava that touches water turns to obsidian.</p>
+  <p><kbd>W A S D</kbd> walk &nbsp; <kbd>Space</kbd> jump / swim &nbsp; <kbd>Shift</kbd> sprint</p>
+  <p><kbd>Left click</kbd> mine &nbsp; <kbd>Right click</kbd> place</p>
+  <p><kbd>1</kbd>–<kbd>9</kbd> or wheel: choose block &nbsp; <kbd>F</kbd> fly</p>
+  <p><kbd>E</kbd> erupt now &nbsp; <kbd>T</kbd> (hold) fast time</p>
+  <p class="go">Click to play</p>
+</div></div>
+<div id="err"></div>
+<pre id="test-result"></pre>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+
+const errBox = document.getElementById('err');
+addEventListener('error', e => { errBox.textContent += (e.message || e) + '\n'; });
+
+const P = new URLSearchParams(location.search);
+const num = (k, d) => (P.has(k) ? parseFloat(P.get(k)) : d);
+
+// ---------------------------------------------------------------- constants
+const W = 160, D = 160, H = 96, CH = 16, SEA = 24, FLOOR = 12;
+const SEA_TOP = SEA + 0.875;
+const DAY_LEN = 480;                       // seconds for one full day
+const WATER_TICK = 0.2, LAVA_TICK = 0.3;   // seconds per fluid step
+const ERUPT_EVERY = 150, ERUPT_LEN = 45, ERUPT_FIRST = 45;
+
+const AIR=0, GRASS=1, DIRT=2, STONE=3, BASALT=4, SAND=5, OBSIDIAN=6, LOG=7, LEAVES=8, WATER=9, LAVA=10, ASH=11, BEDROCK=12;
+const NAMES = ['Air','Grass','Dirt','Stone','Basalt','Black Sand','Obsidian','Palm Log','Palm Leaves','Water','Lava','Volcanic Ash','Bedrock'];
+const TEX = [null,[0,1,2],[2,2,2],[3,3,3],[14,4,14],[5,5,5],[6,6,6],[8,7,8],[9,9,9],[12,12,12],[13,13,13],[10,10,10],[11,11,11]];
+const DEBRIS = [0,0x4e9234,0x74523a,0x808084,0x34363c,0x242328,0x1a1024,0x96704a,0x3e8c30,0x2870be,0xf06414,0x6c6864,0x282828];
+const HOTBAR = [GRASS, STONE, SAND, BASALT, OBSIDIAN, LOG, LEAVES, WATER, LAVA];
+const MAXL = { [WATER]: 7, [LAVA]: 4 };
+const isFluid = b => b === WATER || b === LAVA;
+const isSolid = b => b !== AIR && b !== WATER && b !== LAVA;
+const isOpaque = b => isSolid(b) && b !== LEAVES;
+
+// ---------------------------------------------------------------- noise
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const SEED = 7331;
+const rand = mulberry32(SEED);
+function h2(x,y){let h=(Math.imul(x|0,374761393)+Math.imul(y|0,668265263)+SEED)|0;h=Math.imul(h^(h>>>13),1274126177);return((h^(h>>>16))>>>0)/4294967296;}
+function vn(x,y){const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi,u=xf*xf*(3-2*xf),v=yf*yf*(3-2*yf);
+  const a=h2(xi,yi),b=h2(xi+1,yi),c=h2(xi,yi+1),d=h2(xi+1,yi+1);return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v;}
+function fbm(x,y,o=4){let s=0,a=0.5,n=0;for(let i=0;i<o;i++){s+=a*vn(x,y);n+=a;x=x*2.03+17.1;y=y*2.03+9.2;a*=0.5;}return s/n;}
+const ss = (e0,e1,x) => { const t = Math.min(1, Math.max(0, (x-e0)/(e1-e0))); return t*t*(3-2*t); };
+const lerp = (a,b,t) => a + (b-a)*t;
+
+// ---------------------------------------------------------------- world storage
+const blocks = new Uint8Array(W*H*D);
+const fl = new Uint8Array(W*H*D);          // fluid state: 0 source, 1..7 flowing, 8 falling
+const idx = (x,y,z) => (y*D+z)*W+x;
+const inb = (x,y,z) => x>=0 && z>=0 && y>=0 && x<W && z<D && y<H;
+function get(x,y,z){ if (y<0) return BEDROCK; if (y>=H) return AIR; if (x<0||z<0||x>=W||z>=D) return BEDROCK; return blocks[(y*D+z)*W+x]; }
+const lavaCells = new Set();
+const activeW = new Set(), activeL = new Set();
+
+// ---------------------------------------------------------------- terrain generation
+const IC = { x: 74, z: 80 };               // island centre
+const V = { x: 98, z: 78 };                // volcano centre
+let RIM_Y = 0, LAKE_Y = 0;
+const heights = new Int16Array(W*D), volc = new Float32Array(W*D);
+const spawn = new THREE.Vector3();
+
+function generate(){
+  for (let z=0; z<D; z++) for (let x=0; x<W; x++){
+    const dx=(x-IC.x)/62, dz=(z-IC.z)/56;
+    const r=Math.sqrt(dx*dx+dz*dz);
+    const e = 1 - r + (fbm(x*0.018, z*0.018) - 0.5)*0.6;
+    let h;
+    if (e > 0) h = SEA + 0.5 + e*14 + (fbm(x*0.06+50, z*0.06)-0.5)*5*Math.min(1, e*4);
+    else h = SEA + 0.5 + e*28;
+    const vx=x-V.x, vz=z-V.z, dv=Math.sqrt(vx*vx+vz*vz), ang=Math.atan2(vz,vx);
+    const gully = fbm(Math.cos(ang)*2.2+10, Math.sin(ang)*2.2+10+dv*0.02, 3) - 0.5;
+    const cone = Math.max(0, 1 - dv/44);
+    const ridge = Math.abs(Math.sin(ang*7 + gully*6)) - 0.5;
+    let hv = 56*Math.pow(cone,1.5)*(1 + (gully*0.45 + ridge*0.14)*Math.min(1, dv/12));
+    hv += (fbm(x*0.11+90, z*0.11+40, 3) - 0.5)*7*Math.min(1, hv/15)*Math.min(1, dv/12);
+    if (dv < 8) hv -= 34*(1-(dv/8)**2);
+    h += hv;
+    const edge = Math.min(x, z, W-1-x, D-1-z);
+    if (h < SEA) h = FLOOR + (h-FLOOR)*Math.min(1, edge/20);
+    h = Math.max(FLOOR, Math.min(H-8, Math.floor(h)));
+    heights[z*W+x] = h; volc[z*W+x] = hv;
+  }
+  // crater lake level and rim
+  let floorMin = 999, rimMin = 999;
+  for (let z=0; z<D; z++) for (let x=0; x<W; x++){
+    const dv = Math.hypot(x-V.x, z-V.z), h = heights[z*W+x];
+    if (dv < 3) floorMin = Math.min(floorMin, h);
+    if (dv > 6.5 && dv < 8.5) rimMin = Math.min(rimMin, h);
+  }
+  RIM_Y = rimMin; LAKE_Y = Math.min(floorMin + 5, rimMin - 2);
+
+  for (let z=0; z<D; z++) for (let x=0; x<W; x++){
+    const h = heights[z*W+x], hv = volc[z*W+x];
+    const dv = Math.hypot(x-V.x, z-V.z);
+    const n = fbm(x*0.15+3, z*0.15+7, 2);
+    for (let y=0; y<=h; y++){
+      let b;
+      if (y === 0) b = BEDROCK;
+      else if (y < h-3) b = hv > 10 ? BASALT : STONE;
+      else if (dv < 7.5) b = y === h ? (n > 0.5 ? OBSIDIAN : BASALT) : BASALT;
+      else if (h <= SEA+2 && hv < 6) b = (h < SEA-3 && n > 0.62) ? BASALT : SAND;
+      else if (hv > 13) b = y === h ? (n > 0.55 ? ASH : BASALT) : BASALT;
+      else if (hv > 6 && n + (hv-6)/10 > 0.75) b = y === h ? (n > 0.6 ? BASALT : ASH) : BASALT;
+      else b = y === h ? GRASS : DIRT;
+      blocks[idx(x,y,z)] = b;
+    }
+    for (let y=h+1; y<=SEA; y++) blocks[idx(x,y,z)] = WATER;
+    if (dv < 7.5) for (let y=h+1; y<=LAKE_Y; y++){ blocks[idx(x,y,z)] = LAVA; lavaCells.add(idx(x,y,z)); }
+  }
+  // palm trees
+  const trees = [];
+  for (let a=0; a<6000 && trees.length<55; a++){
+    const x = 4 + Math.floor(rand()*(W-8)), z = 4 + Math.floor(rand()*(D-8));
+    const h = heights[z*W+x], top = blocks[idx(x,h,z)];
+    if ((top !== GRASS && top !== SAND) || h < SEA+1 || h > SEA+8 || volc[z*W+x] > 5) continue;
+    if (trees.some(t => Math.abs(t[0]-x) + Math.abs(t[1]-z) < 7)) continue;
+    trees.push([x,z]); palm(x, h+1, z);
+  }
+  // a spring on the west hills so flowing water is visible from the start
+  let best = null;
+  for (let z=50; z<110; z++) for (let x=20; x<70; x++){
+    const h = heights[z*W+x];
+    if (blocks[idx(x,h,z)] === GRASS && h >= SEA+8 && (!best || h > best[1])) best = [x,h,z];
+  }
+  if (best && get(best[0],best[1]+1,best[2]) === AIR){ blocks[idx(best[0],best[1]+1,best[2])] = WATER; activeW.add(idx(best[0],best[1]+1,best[2])); }
+  // spawn on the west beach, looking toward the volcano
+  const clear = (x,z) => { for (let dz=-5; dz<=5; dz++) for (let dx=-5; dx<=5; dx++) for (let y=SEA; y<SEA+16; y++) if (get(x+dx,y,z+dz) === LOG) return false; return true; };
+  outer: for (let dz=0; dz<40; dz++) for (const zz of [IC.z+dz, IC.z-dz]){
+    for (let x=4; x<W/2; x++){ const h = heights[zz*W+x]; if (h >= SEA+1){ if (clear(x+2,zz)){ spawn.set(x+2.5, heights[zz*W+x+2]+1.01, zz+0.5); break outer; } break; } }
+  }
+}
+
+function palm(x,y,z){
+  const hgt = 6 + Math.floor(rand()*4);
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+  const lean = dirs[Math.floor(rand()*4)];
+  let px=x, pz=z;
+  for (let i=0; i<hgt; i++){
+    if (i === Math.floor(hgt*0.45) || i === Math.floor(hgt*0.8)){ px += lean[0]; pz += lean[1]; }
+    if (inb(px,y+i,pz)) blocks[idx(px,y+i,pz)] = LOG;
+  }
+  const ty = y + hgt;
+  const put = (a,b,c) => { if (inb(a,b,c) && blocks[idx(a,b,c)] === AIR) blocks[idx(a,b,c)] = LEAVES; };
+  put(px,ty,pz); put(px,ty+1,pz);
+  for (const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]){
+    const len = (dx && dz) ? 2 : 3;
+    for (let k=1; k<=len; k++) put(px+dx*k, ty - (k === len ? 1 : 0), pz+dz*k);
+  }
+}
+
+// ---------------------------------------------------------------- block updates
+const dirtyChunks = new Set();
+function markDirty(x,z){
+  const cx=x>>4, cz=z>>4, lx=x&15, lz=z&15;
+  for (let ox=(lx===0?-1:0); ox<=(lx===15?1:0); ox++)
+    for (let oz=(lz===0?-1:0); oz<=(lz===15?1:0); oz++){
+      const X=cx+ox, Z=cz+oz;
+      if (X>=0 && Z>=0 && X<W/CH && Z<D/CH) dirtyChunks.add(X + Z*(W/CH));
+    }
+}
+const N6 = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+const N4 = [[1,0],[-1,0],[0,1],[0,-1]];
+function wake(x,y,z){
+  for (let k=-1; k<6; k++){
+    const X = k<0 ? x : x+N6[k][0], Y = k<0 ? y : y+N6[k][1], Z = k<0 ? z : z+N6[k][2];
+    if (!inb(X,Y,Z)) continue;
+    const i = idx(X,Y,Z), b = blocks[i];
+    if (b === WATER) activeW.add(i); else if (b === LAVA) activeL.add(i);
+  }
+}
+function setBlock(x,y,z,b,lv=0){
+  if (!inb(x,y,z)) return;
+  const i = idx(x,y,z), old = blocks[i];
+  if (old === b && fl[i] === lv) return;
+  blocks[i] = b; fl[i] = isFluid(b) ? lv : 0;
+  if (old === LAVA && b !== LAVA) lavaCells.delete(i);
+  if (b === LAVA) lavaCells.add(i);
+  markDirty(x,z); wake(x,y,z);
+}
+
+// ---------------------------------------------------------------- fluid simulation
+let obsidianMade = 0;
+function touches(x,y,z,b){ for (const n of N6) if (get(x+n[0],y+n[1],z+n[2]) === b) return true; return false; }
+function dropDist(x,y,z,d,R,F){
+  for (let k=1; k<=R; k++){
+    const X=x+d[0]*k, Z=z+d[1]*k, b=get(X,y,Z);
+    if (b !== AIR && !(b === F && fl[idx(X,y,Z)] !== 0)) return 99;
+    const bl = get(X,y-1,Z);
+    if (bl === AIR || (bl === F && fl[idx(X,y-1,Z)] !== 0)) return k;
+  }
+  return 99;
+}
+function tickFluid(F){
+  const set = F === WATER ? activeW : activeL;
+  if (!set.size) return;
+  const cells = Array.from(set); set.clear();
+  const MAX = MAXL[F];
+  for (const i of cells){
+    if (blocks[i] !== F) continue;
+    const x = i % W, z = Math.floor(i / W) % D, y = Math.floor(i / (W*D));
+    // lava + water -> obsidian (every kind of lava cell)
+    if (F === LAVA){
+      if (touches(x,y,z,WATER)){ setBlock(x,y,z,OBSIDIAN); obsidianMade++; puff('steam', x+0.5, y+1, z+0.5); continue; }
+      for (const n of N6){
+        const b = get(x+n[0],y+n[1],z+n[2]);
+        if ((b === LEAVES || b === LOG) && Math.random() < 0.2){ setBlock(x+n[0],y+n[1],z+n[2],AIR); puff('smoke', x+n[0]+0.5, y+n[1]+0.5, z+n[2]+0.5); }
+      }
+    } else {
+      for (const n of N6){
+        if (get(x+n[0],y+n[1],z+n[2]) === LAVA){ setBlock(x+n[0],y+n[1],z+n[2],OBSIDIAN); obsidianMade++; puff('steam', x+n[0]+0.5, y+n[1]+1, z+n[2]+0.5); }
+      }
+    }
+    let f = fl[i];
+    const isSrc = f === 0;
+    if (!isSrc){
+      let nf;
+      if (get(x,y+1,z) === F) nf = 8;
+      else {
+        let best = 99, srcN = 0;
+        for (const [dx,dz] of N4){
+          const X=x+dx, Z=z+dz;
+          if (get(X,y,Z) !== F) continue;
+          const g = fl[idx(X,y,Z)];
+          if (g === 0) srcN++;
+          const bl = get(X,y-1,Z);
+          const feeds = g === 0 || (bl !== AIR && bl !== F) || (bl === F && fl[idx(X,y-1,Z)] === 0);
+          if (feeds) best = Math.min(best, ((g & 8) ? 0 : g) + 1);
+        }
+        nf = best <= MAX ? best : -1;
+        if (F === WATER && srcN >= 2){ const bl = get(x,y-1,z); if (bl !== AIR && (bl !== WATER || fl[idx(x,y-1,z)] === 0)) nf = 0; }
+      }
+      if (nf === -1){
+        if (F === LAVA && isSolid(get(x,y-1,z)) && Math.random() < 0.3) setBlock(x,y,z,BASALT);
+        else setBlock(x,y,z,AIR);
+        continue;
+      }
+      if (nf !== f){ fl[i] = nf; f = nf; markDirty(x,z); wake(x,y,z); }
+    }
+    const eff = (f & 8) ? 0 : f;
+    const below = get(x,y-1,z);
+    if (below === AIR){ setBlock(x,y-1,z,F,8); if (!isSrc) continue; }
+    else if (below === F && fl[idx(x,y-1,z)] !== 0 && !isSrc) continue;
+    if (eff + 1 > MAX) continue;
+    // a drop nearby: flow only toward the lowest one (even if that cell is already fluid), so fluids
+    // form streams instead of sheets; on flat ground: spread out
+    const open = N4.filter(d => { const b = get(x+d[0],y,z+d[1]); return b === AIR || b === F; });
+    if (!open.length) continue;
+    const dist = open.map(d => dropDist(x,y,z,d,5,F));
+    const m = Math.min(...dist);
+    if (m < 99){
+      let bk = -1, bh = 1e9;
+      for (let k=0; k<open.length; k++){
+        if (dist[k] !== m) continue;
+        const X = x+open[k][0]*m, Z = z+open[k][1]*m;
+        let yy = y-1; while (yy > 0 && get(X,yy,Z) === AIR) yy--;
+        if (yy < bh){ bh = yy; bk = k; }
+      }
+      if (get(x+open[bk][0], y, z+open[bk][1]) === AIR) setBlock(x+open[bk][0], y, z+open[bk][1], F, eff+1);
+    } else for (const d of open) if (get(x+d[0],y,z+d[1]) === AIR) setBlock(x+d[0], y, z+d[1], F, eff+1);
+  }
+}
+
+// ---------------------------------------------------------------- texture atlas
+function makeAtlas(){
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const g = cv.getContext('2d');
+  const R = mulberry32(99);
+  const j = (c,v) => c.map(k => Math.max(0, Math.min(255, k + (R()-0.5)*v)));
+  function tile(t, fn){
+    const ox=(t%4)*16, oy=Math.floor(t/4)*16;
+    for (let y=0; y<16; y++) for (let x=0; x<16; x++){
+      const c = fn(x,y); if (!c) continue;
+      g.fillStyle = `rgb(${c[0]|0},${c[1]|0},${c[2]|0})`; g.fillRect(ox+x, oy+y, 1, 1);
+    }
+  }
+  tile(0, () => j([62,122,42],30));
+  tile(1, (x,y) => { const edge = 3 + (x%3===0?1:0) + (x%5===0?1:0); return y < edge ? j([62,122,42],26) : j([116,82,54],28); });
+  tile(2, () => j([116,82,54],30));
+  tile(3, () => R() < 0.08 ? [92,92,96] : j([128,128,132],26));
+  tile(4, (x) => { const k = x%5===0 ? 0.65 : 1; return j([56*k,58*k,64*k],14); });
+  tile(5, () => { const v = R(); return v > 0.96 ? [150,150,160] : v > 0.85 ? j([72,70,74],10) : j([38,37,42],12); });
+  tile(6, (x,y) => { const s = Math.sin((x+y*0.6)*0.9) + Math.sin(x*0.35-y*1.1); return s > 1.5 ? [128,86,180] : s > 1.1 ? [62,38,96] : j([24,15,34],10); });
+  tile(7, (x,y) => { const b = y%4===0 ? 0.72 : 1, d = ((x + (Math.floor(y/4)%2)*3) % 6 === 0) ? 0.8 : 1; return j([150*b*d,112*b*d,72*b*d],18); });
+  tile(8, (x,y) => { const r = Math.hypot(x-7.5,y-7.5); return r > 7.5 ? j([120,90,58],10) : (Math.floor(r)%2 ? j([176,140,92],14) : j([150,116,74],14)); });
+  tile(9, (x,y) => { if (R() < 0.22) return null; const s = ((x+y)%4===0) || ((x-y+16)%5===0); return s ? j([40,98,34],20) : j([62,140,48],30); });
+  tile(10, () => R() > 0.9 ? j([118,110,104],10) : j([82,77,73],18));
+  tile(11, () => j([40,40,44],40));
+  tile(12, () => j([40,110,190],30));
+  tile(13, (x,y) => (Math.sin(x*0.8)+Math.cos(y*0.7+x*0.3)) > 0.8 ? [255,220,90] : j([240,100,20],30));
+  tile(14, (x,y) => { const e = ((x + (Math.floor(y/5)%2)*2) % 5 === 0) || (y%5===0); return e ? [34,35,40] : j([60,62,68],14); });
+  return cv;
+}
+const atlasCanvas = makeAtlas();
+const atlasTex = new THREE.CanvasTexture(atlasCanvas);
+atlasTex.magFilter = atlasTex.minFilter = THREE.NearestFilter;
+atlasTex.generateMipmaps = false;
+atlasTex.colorSpace = THREE.SRGBColorSpace;
+
+// ---------------------------------------------------------------- renderer + scene
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+const RSCALE = num('scale', 1);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5) * RSCALE);
+renderer.setSize(innerWidth, innerHeight);
+renderer.autoClear = false;
+renderer.toneMapping = THREE.NoToneMapping;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.autoUpdate = false;
+renderer.setClearColor(0x000000, 1);
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x88aacc, 0.0045);
+const camera = new THREE.PerspectiveCamera(72, innerWidth/innerHeight, 0.1, 2000);
+camera.rotation.order = 'YXZ';
+
+// shared uniforms
+const U = {
+  uTime: { value: 0 }, uLightDir: { value: new THREE.Vector3(0,1,0) }, uLightCol: { value: new THREE.Color() },
+  uSunDir: { value: new THREE.Vector3() }, uMoonDir: { value: new THREE.Vector3() }, uStarRot: { value: 0 },
+  uAmbient: { value: new THREE.Color() }, uFogColor: { value: scene.fog.color }, uFogDensity: { value: 0.0045 },
+  uCamPos: { value: new THREE.Vector3() }, uRes: { value: new THREE.Vector2(1,1) }, uClipY: { value: -1e9 },
+  uAsh: { value: 0 }, uFar: { value: camera.far },
+};
+
+const NOISE = `
+float hash21(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
+float vnoise(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.0-2.0*f);
+  return mix(mix(hash21(i),hash21(i+vec2(1.0,0.0)),u.x), mix(hash21(i+vec2(0.0,1.0)),hash21(i+vec2(1.0,1.0)),u.x), u.y); }
+float fbm(vec2 p){ float s=0.0, a=0.5; for(int i=0;i<4;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.1,9.2); a*=0.5; } return s/0.9375; }
+float hash31(vec3 p){ p = fract(p*vec3(0.1031,0.1030,0.0973)); p += dot(p, p.yxz+33.33); return fract((p.x+p.y)*p.z); }
+float vnoise3(vec3 p){ vec3 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
+  return mix(mix(mix(hash31(i),hash31(i+vec3(1,0,0)),f.x), mix(hash31(i+vec3(0,1,0)),hash31(i+vec3(1,1,0)),f.x),f.y),
+             mix(mix(hash31(i+vec3(0,0,1)),hash31(i+vec3(1,0,1)),f.x), mix(hash31(i+vec3(0,1,1)),hash31(i+vec3(1,1,1)),f.x),f.y), f.z); }
+`;
+const FOG = `vec3 applyFog(vec3 c, vec3 wp){ float d = length(uCamPos - wp); float f = 1.0 - exp(-uFogDensity*uFogDensity*d*d); return mix(c, uFogColor, f); }`;
+
+// ---- sky
+const skyMat = new THREE.ShaderMaterial({
+  uniforms: { uSunDir: U.uSunDir, uMoonDir: U.uMoonDir, uTime: U.uTime, uStarRot: U.uStarRot, uAsh: U.uAsh },
+  vertexShader: `varying vec3 vDir; void main(){ vDir = position; vec4 p = projectionMatrix*modelViewMatrix*vec4(position,1.0); gl_Position = p.xyww; }`,
+  fragmentShader: `
+    uniform vec3 uSunDir, uMoonDir; uniform float uTime, uStarRot, uAsh; varying vec3 vDir;
+    ${NOISE}
+    void main(){
+      vec3 d = normalize(vDir);
+      float e = uSunDir.y;
+      float dayF = smoothstep(-0.18, 0.2, e);
+      float h = clamp(d.y, 0.0, 1.0);
+      vec3 zen = mix(vec3(0.004,0.006,0.02), vec3(0.10,0.28,0.70), dayF);
+      vec3 hor = mix(vec3(0.02,0.03,0.06), vec3(0.55,0.70,0.88), dayF);
+      float sd = max(dot(d, uSunDir), 0.0);
+      float sunset = exp(-pow(e*4.0, 2.0));
+      zen *= 1.0 - 0.45*sunset*dayF;
+      hor = mix(hor, vec3(1.0,0.42,0.16)*dayF*1.1, sunset*(0.35 + 0.55*pow(sd, 2.0)));
+      vec3 col = mix(hor, zen, pow(h, 0.45));
+      col = mix(col, vec3(1.0,0.36,0.10)*1.3, clamp(sunset*pow(sd,3.0)*exp(-h*4.0), 0.0, 1.0));
+      col += vec3(1.0,0.5,0.25)*sunset*0.28*exp(-h*2.5)*(0.35+0.65*sd);
+      col += vec3(0.25,0.12,0.38)*sunset*exp(-h*3.0)*0.25*(1.0-sd);
+      if (d.y < 0.0) col = mix(col, hor*0.5, clamp(-d.y*4.0, 0.0, 1.0));
+      col = mix(col, vec3(0.30,0.26,0.23)*(0.08+0.92*dayF), uAsh*0.5*exp(-h*1.5));
+      float sunVis = smoothstep(-0.06, 0.0, e);
+      vec3 sunCol = mix(vec3(1.0,0.45,0.15), vec3(1.0,0.95,0.88), smoothstep(0.0,0.35,e));
+      col += sunCol*(smoothstep(0.99955,0.99975,sd)*40.0 + pow(sd,350.0)*3.0 + pow(sd,12.0)*0.15*dayF)*sunVis*(1.0-uAsh*0.6);
+      float night = 1.0 - smoothstep(-0.25, 0.05, e);
+      if (night > 0.0 && d.y > -0.05){
+        float c = cos(uStarRot), s = sin(uStarRot);
+        vec3 r = vec3(d.x*c + d.y*s, -d.x*s + d.y*c, d.z);
+        vec3 p = r*180.0; vec3 cell = floor(p); vec3 f = fract(p) - 0.5;
+        float hs = hash31(cell);
+        if (hs > 0.985){
+          float st = smoothstep(0.3, 0.0, length(f)) * (0.6 + 0.4*sin(uTime*3.0 + hs*300.0));
+          col += vec3(0.85,0.9,1.0)*st*night*(hs-0.985)*140.0*smoothstep(-0.05,0.2,d.y)*(1.0-uAsh*0.7);
+        }
+        float band = exp(-pow(dot(r, normalize(vec3(0.3,0.5,0.8)))*5.0, 2.0));
+        col += vec3(0.07,0.07,0.11)*band*vnoise3(r*9.0)*night;
+      }
+      float md = dot(d, uMoonDir);
+      float moonDisc = smoothstep(0.99955, 0.99968, md);
+      float moonUp = smoothstep(-0.1, 0.02, uMoonDir.y);
+      col = mix(col, vec3(0.9,0.92,1.0)*(0.7 + 0.3*vnoise3(d*420.0))*2.4, moonDisc*moonUp);
+      col += vec3(0.5,0.6,0.9)*pow(max(md,0.0), 500.0)*0.5*night*moonUp;
+      gl_FragColor = vec4(col, 1.0);
+    }`,
+  side: THREE.BackSide, depthWrite: false, depthTest: false,
+});
+const sky = new THREE.Mesh(new THREE.SphereGeometry(500, 32, 16), skyMat);
+sky.frustumCulled = false; sky.renderOrder = -10;
+scene.add(sky);
+
+// ---- terrain materials
+const terrainMat = new THREE.MeshStandardMaterial({ map: atlasTex, vertexColors: true, alphaTest: 0.5, roughness: 0.93, metalness: 0 });
+const waterMat = new THREE.ShaderMaterial({
+  uniforms: { tCopy: { value: null }, tRefl: { value: null }, uTexMatrix: { value: new THREE.Matrix4() },
+    uTime: U.uTime, uRes: U.uRes, uCamPos: U.uCamPos, uLightDir: U.uLightDir, uLightCol: U.uLightCol,
+    uAmbient: U.uAmbient, uFogColor: U.uFogColor, uFogDensity: U.uFogDensity },
+  vertexShader: `
+    uniform mat4 uTexMatrix; varying vec3 vWorld; varying vec3 vNormal; varying vec4 vRefl; varying float vViewZ;
+    void main(){ vec4 wp = modelMatrix*vec4(position,1.0); vWorld = wp.xyz; vNormal = normal; vRefl = uTexMatrix*wp;
+      vec4 mv = viewMatrix*wp; vViewZ = -mv.z; gl_Position = projectionMatrix*mv; }`,
+  fragmentShader: `
+    uniform sampler2D tCopy, tRefl; uniform vec2 uRes; uniform float uTime, uFogDensity;
+    uniform vec3 uCamPos, uLightDir, uLightCol, uAmbient, uFogColor;
+    varying vec3 vWorld; varying vec3 vNormal; varying vec4 vRefl; varying float vViewZ;
+    ${NOISE}
+    ${FOG}
+    vec2 waveGrad(vec2 p, float t){
+      vec2 g = vec2(0.0);
+      vec2 d1=vec2(0.8,0.6), d2=vec2(-0.6,0.8), d3=vec2(0.2,-0.98), d4=vec2(-0.9,-0.44);
+      g += d1*cos(dot(p,d1)*0.7 + t*1.1)*0.07;
+      g += d2*cos(dot(p,d2)*1.3 + t*1.7)*0.05;
+      g += d3*cos(dot(p,d3)*2.1 + t*2.3)*0.035;
+      g += d4*cos(dot(p,d4)*3.7 + t*3.1)*0.02;
+      float e = 0.05;
+      vec2 q = p*1.8 + vec2(t*0.3, t*0.2);
+      float n0 = vnoise(q), nx = vnoise(q+vec2(e,0.0)), nz = vnoise(q+vec2(0.0,e));
+      g += vec2(nx-n0, nz-n0)/e*0.03;
+      vec2 q2 = p*4.3 - vec2(t*0.5, -t*0.4);
+      float m0 = vnoise(q2), mx = vnoise(q2+vec2(e,0.0)), mz = vnoise(q2+vec2(0.0,e));
+      g += vec2(mx-m0, mz-m0)/e*0.012;
+      return g;
+    }
+    void main(){
+      vec3 V = normalize(uCamPos - vWorld);
+      bool top = vNormal.y > 0.5;
+      vec3 N;
+      if (top){ vec2 g = waveGrad(vWorld.xz, uTime); N = normalize(vec3(-g.x, 1.0, -g.y)); }
+      else { float s = vnoise(vec2(vWorld.x + vWorld.z, vWorld.y*2.0 + uTime*5.0)*2.0); N = normalize(vNormal + vec3(0.0,(s-0.5)*0.5,0.0)); }
+      bool under = !gl_FrontFacing;
+      if (under) N = -N;
+      vec2 suv = gl_FragCoord.xy / uRes;
+      vec4 sc0 = texture2D(tCopy, suv);
+      float thick0 = max(sc0.a - vViewZ, 0.0);
+      vec2 ruv = suv + N.xz*0.035*clamp(thick0*0.5, 0.0, 1.0);
+      vec4 sc = texture2D(tCopy, ruv);
+      if (sc.a < vViewZ) sc = sc0;
+      float dist = length(uCamPos - vWorld);
+      float path = max(sc.a - vViewZ, 0.0) * dist / max(vViewZ, 1e-3);
+      if (under) path = 1.0;
+      vec3 lightLvl = uAmbient + uLightCol*max(uLightDir.y, 0.0)*0.35;
+      vec3 refr = sc.rgb*exp(-path*vec3(0.38,0.075,0.055)) + vec3(0.02,0.15,0.19)*lightLvl*(1.0 - exp(-path*0.25));
+      vec3 refl = top ? texture2D(tRefl, vRefl.xy/vRefl.w + N.xz*0.05).rgb : uFogColor;
+      float cosT = clamp(dot(N, V), 0.0, 1.0);
+      float F = 0.02 + 0.98*pow(1.0 - cosT, 5.0);
+      if (under) F = 0.1;
+      vec3 col = mix(refr, refl, F);
+      vec3 R = reflect(-V, N);
+      col += uLightCol*pow(max(dot(R, uLightDir), 0.0), 280.0)*5.0*step(0.0, uLightDir.y);
+      if (top && !under){
+        float edge = 1.0 - smoothstep(0.0, 0.8, thick0);
+        float fn = vnoise(vWorld.xz*3.0 + uTime*0.6)*vnoise(vWorld.xz*7.0 - uTime*0.4);
+        float foam = edge*smoothstep(0.12, 0.3, fn + edge*0.25);
+        col = mix(col, vec3(0.85)*lightLvl, foam*0.75);
+      }
+      gl_FragColor = vec4(applyFog(col, vWorld), 1.0);
+    }`,
+  side: THREE.DoubleSide,
+});
+const lavaMat = new THREE.ShaderMaterial({
+  uniforms: { uTime: U.uTime, uClipY: U.uClipY, uCamPos: U.uCamPos, uFogColor: U.uFogColor, uFogDensity: U.uFogDensity },
+  vertexShader: `varying vec3 vWorld; varying vec3 vN; void main(){ vec4 wp = modelMatrix*vec4(position,1.0); vWorld = wp.xyz; vN = normal; gl_Position = projectionMatrix*viewMatrix*wp; }`,
+  fragmentShader: `
+    uniform float uTime, uClipY, uFogDensity; uniform vec3 uCamPos, uFogColor; varying vec3 vWorld; varying vec3 vN;
+    ${NOISE}
+    ${FOG}
+    void main(){
+      if (vWorld.y < uClipY) discard;
+      float t = uTime;
+      vec2 p = abs(vN.y) > 0.5 ? vWorld.xz : vec2(vWorld.x + vWorld.z, vWorld.y*1.5 + t*0.8);
+      vec2 q = p*0.55 + vec2(fbm(p*0.5 + t*0.05), fbm(p*0.5 - t*0.04))*1.5;
+      float n = fbm(q + vec2(t*0.08, -t*0.06));
+      float cr = fbm(p*1.6 - t*0.12);
+      float crust = smoothstep(0.52, 0.68, n);
+      vec3 hot = mix(vec3(3.2,0.55,0.05), vec3(5.0,1.7,0.22), smoothstep(0.35, 0.7, cr));
+      float line = smoothstep(0.1, 0.0, abs(cr - 0.5));
+      vec3 crustCol = vec3(0.07,0.035,0.025) + vec3(2.5,0.5,0.05)*line*0.6;
+      vec3 col = mix(hot, crustCol, crust*0.9);
+      col *= 0.85 + 0.15*sin(t*1.7 + n*9.0);
+      gl_FragColor = vec4(mix(col, applyFog(col, vWorld), 0.85), 1.0);
+    }`,
+});
+
+// ---------------------------------------------------------------- meshing
+const FACES = [];
+for (let a=0; a<3; a++) for (const s of [1,-1]){
+  const n=[0,0,0]; n[a]=s;
+  const u=(a+1)%3, v=(a+2)%3;
+  const cs = s>0 ? [[0,0],[1,0],[1,1],[0,1]] : [[0,0],[0,1],[1,1],[1,0]];
+  FACES.push({ a, s, n, corners: cs.map(([cu,cv]) => {
+    const p=[0,0,0]; p[a] = s>0 ? 1 : 0; p[u]=cu; p[v]=cv;
+    const du=[0,0,0], dv=[0,0,0]; du[u] = cu ? 1 : -1; dv[v] = cv ? 1 : -1;
+    return { p, du, dv };
+  }) });
+}
+const AO = [0.42, 0.62, 0.8, 1.0];
+
+function fluidHeight(x,y,z,F){
+  if (get(x,y,z) !== F) return -1;
+  if (get(x,y+1,z) === F) return 1;
+  const f = fl[idx(x,y,z)];
+  if (f === 0 || (f & 8)) return 0.875;
+  return 0.875 - f*(0.75/(MAXL[F]+1));
+}
+function cornerH(x,y,z,F,cx,cz){
+  let sum=0, n=0;
+  for (let ox=cx-1; ox<=cx; ox++) for (let oz=cz-1; oz<=cz; oz++){
+    if (get(x+ox,y+1,z+oz) === F) return 1;
+    const h = fluidHeight(x+ox,y,z+oz,F);
+    if (h >= 0){ sum += h; n++; }
+  }
+  return n ? sum/n : 0.875;
+}
+
+const chunks = [];
+for (let cz=0; cz<D/CH; cz++) for (let cx=0; cx<W/CH; cx++) chunks.push({ cx, cz, solid: null, water: null, lava: null });
+
+function buildChunk(ch){
+  const x0=ch.cx*CH, z0=ch.cz*CH;
+  const S={p:[],n:[],u:[],c:[],i:[]}, Wt={p:[],n:[],i:[]}, Lv={p:[],n:[],i:[]};
+  for (let y=0; y<H; y++) for (let z=z0; z<z0+CH; z++) for (let x=x0; x<x0+CH; x++){
+    const b = blocks[(y*D+z)*W+x];
+    if (b === AIR) continue;
+    if (b === WATER || b === LAVA){
+      const G = b === WATER ? Wt : Lv;
+      for (const Fc of FACES){
+        const nb = get(x+Fc.n[0], y+Fc.n[1], z+Fc.n[2]);
+        if (nb === b || isOpaque(nb)) continue;
+        const base = G.p.length/3;
+        for (const C of Fc.corners){
+          const p = C.p;
+          G.p.push(x+p[0], p[1] ? y + cornerH(x,y,z,b,p[0],p[2]) : y, z+p[2]);
+          G.n.push(Fc.n[0], Fc.n[1], Fc.n[2]);
+        }
+        G.i.push(base,base+1,base+2, base,base+2,base+3);
+      }
+      continue;
+    }
+    const tex = TEX[b], leaf = b === LEAVES;
+    for (const Fc of FACES){
+      const ax=x+Fc.n[0], ay=y+Fc.n[1], az=z+Fc.n[2];
+      const nb = get(ax,ay,az);
+      if (isOpaque(nb) || (leaf && nb === LEAVES)) continue;
+      const t = Fc.a === 1 ? (Fc.s > 0 ? tex[0] : tex[2]) : tex[1];
+      const tx = t%4, ty = Math.floor(t/4);
+      const base = S.p.length/3, ao = [0,0,0,0];
+      for (let k=0; k<4; k++){
+        const C = Fc.corners[k], p = C.p, du = C.du, dv = C.dv;
+        S.p.push(x+p[0], y+p[1], z+p[2]); S.n.push(Fc.n[0], Fc.n[1], Fc.n[2]);
+        let su, sv;
+        if (Fc.a === 1){ su=p[0]; sv=p[2]; } else if (Fc.a === 0){ su=p[2]; sv=p[1]; } else { su=p[0]; sv=p[1]; }
+        S.u.push((tx+0.002+su*0.996)/4, 1-(ty+1)/4+(0.002+sv*0.996)/4);
+        const s1 = isOpaque(get(ax+du[0],ay+du[1],az+du[2])) ? 1 : 0;
+        const s2 = isOpaque(get(ax+dv[0],ay+dv[1],az+dv[2])) ? 1 : 0;
+        const cc = isOpaque(get(ax+du[0]+dv[0],ay+du[1]+dv[1],az+du[2]+dv[2])) ? 1 : 0;
+        const a = (s1 && s2) ? 0 : 3-(s1+s2+cc);
+        ao[k] = a; const l = AO[a]; S.c.push(l,l,l);
+      }
+      if (ao[0]+ao[2] > ao[1]+ao[3]) S.i.push(base,base+1,base+2, base,base+2,base+3);
+      else S.i.push(base+1,base+2,base+3, base+1,base+3,base);
+    }
+  }
+  const mk = (G) => {
+    if (!G.i.length) return null;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(G.p,3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(G.n,3));
+    if (G.u){ g.setAttribute('uv', new THREE.Float32BufferAttribute(G.u,2)); g.setAttribute('color', new THREE.Float32BufferAttribute(G.c,3)); }
+    g.setIndex(G.i); g.computeBoundingSphere();
+    return g;
+  };
+  const put = (key, G, mat, layer, shadow) => {
+    const g = mk(G), m = ch[key];
+    if (m){ m.geometry.dispose(); if (!g){ scene.remove(m); ch[key] = null; return; } m.geometry = g; return; }
+    if (!g) return;
+    const mesh = new THREE.Mesh(g, mat);
+    mesh.layers.set(layer);
+    if (shadow){ mesh.castShadow = true; mesh.receiveShadow = true; }
+    scene.add(mesh); ch[key] = mesh;
+  };
+  put('solid', S, terrainMat, 0, true);
+  put('water', Wt, waterMat, 1, false);
+  put('lava', Lv, lavaMat, 0, false);
+}
+
+// ---------------------------------------------------------------- ocean beyond the island + seabed
+{
+  const R = 3000, y = SEA_TOP, p = [], i = [];
+  const quad = (x0,z0,x1,z1) => { const b = p.length/3; p.push(x0,y,z0, x0,y,z1, x1,y,z1, x1,y,z0); i.push(b,b+1,b+2, b,b+2,b+3); };
+  quad(-R,-R,0,R); quad(W,-R,R,R); quad(0,-R,W,0); quad(0,D,W,R);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(p,3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(p.map((_,k) => k%3===1 ? 1 : 0),3));
+  g.setIndex(i);
+  const ocean = new THREE.Mesh(g, waterMat); ocean.layers.set(1); ocean.frustumCulled = false; scene.add(ocean);
+  const bed = new THREE.Mesh(new THREE.PlaneGeometry(6000,6000), new THREE.MeshStandardMaterial({ color: 0x1b1a1f, roughness: 1 }));
+  bed.rotation.x = -Math.PI/2; bed.position.set(W/2, FLOOR+0.98, D/2); scene.add(bed);
+}
+
+// ---------------------------------------------------------------- lights
+const sunLight = new THREE.DirectionalLight(0xffffff, 5);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+Object.assign(sunLight.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 1, far: 420 });
+sunLight.shadow.bias = -0.0005; sunLight.shadow.normalBias = 0.06;
+const hemi = new THREE.HemisphereLight(0xffffff, 0x222222, 2.2);
+scene.add(sunLight, sunLight.target, hemi);
+const lavaLights = [];
+for (let k=0; k<4; k++){ const L = new THREE.PointLight(0xff5a1a, 0, k ? 36 : 70, 2); scene.add(L); lavaLights.push(L); }
+for (const l of [sunLight, hemi, ...lavaLights]) l.layers.enableAll();
+
+// ---------------------------------------------------------------- particles: ash, steam, smoke
+const MAXP = 900;
+const cloudGeo = new THREE.InstancedBufferGeometry();
+cloudGeo.setAttribute('position', new THREE.Float32BufferAttribute([-0.5,-0.5,0, 0.5,-0.5,0, 0.5,0.5,0, -0.5,0.5,0],3));
+cloudGeo.setAttribute('uv', new THREE.Float32BufferAttribute([0,0, 1,0, 1,1, 0,1],2));
+cloudGeo.setIndex([0,1,2, 0,2,3]);
+const iPos = new THREE.InstancedBufferAttribute(new Float32Array(MAXP*3),3).setUsage(THREE.DynamicDrawUsage);
+const iData = new THREE.InstancedBufferAttribute(new Float32Array(MAXP*4),4).setUsage(THREE.DynamicDrawUsage);
+const iCol = new THREE.InstancedBufferAttribute(new Float32Array(MAXP*3),3).setUsage(THREE.DynamicDrawUsage);
+cloudGeo.setAttribute('iPos', iPos); cloudGeo.setAttribute('iData', iData); cloudGeo.setAttribute('iColor', iCol);
+cloudGeo.instanceCount = 0;
+const cloudMat = new THREE.ShaderMaterial({
+  uniforms: { tCopy: { value: null }, uRes: U.uRes, uTime: U.uTime, uLightCol: U.uLightCol, uLightDir: U.uLightDir, uAmbient: U.uAmbient,
+    uFogColor: U.uFogColor, uFogDensity: U.uFogDensity, uCamPos: U.uCamPos },
+  vertexShader: `
+    attribute vec3 iPos; attribute vec4 iData; attribute vec3 iColor;
+    varying vec2 vUv; varying vec4 vData; varying vec3 vColor; varying float vViewZ; varying vec3 vWorld; varying float vSy;
+    void main(){
+      vec3 right = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
+      vec3 up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
+      float a = iData.z*6.2831, ca = cos(a), sa = sin(a);
+      vec2 p = vec2(position.x*ca - position.y*sa, position.x*sa + position.y*ca);
+      vec3 wp = iPos + (right*p.x + up*p.y)*iData.x;
+      vWorld = wp; vUv = uv; vData = iData; vColor = iColor; vSy = p.y;
+      vec4 mv = viewMatrix*vec4(wp,1.0); vViewZ = -mv.z;
+      gl_Position = projectionMatrix*mv;
+    }`,
+  fragmentShader: `
+    uniform sampler2D tCopy; uniform vec2 uRes; uniform float uTime, uFogDensity;
+    uniform vec3 uLightCol, uLightDir, uAmbient, uFogColor, uCamPos;
+    varying vec2 vUv; varying vec4 vData; varying vec3 vColor; varying float vViewZ; varying vec3 vWorld; varying float vSy;
+    ${NOISE}
+    ${FOG}
+    void main(){
+      float r = length(vUv - 0.5)*2.0;
+      float n = fbm(vUv*2.5 + vData.z*17.0 + uTime*0.02);
+      float dens = smoothstep(1.0, 0.25, r + (n-0.5)*0.8)*(0.6 + 0.8*n);
+      if (dens < 0.01) discard;
+      float lit = clamp(0.5 + vSy*0.9 + (n-0.5)*0.6, 0.0, 1.2);
+      vec3 col = vColor*(uAmbient*0.9 + uLightCol*lit*0.4*smoothstep(-0.1,0.1,uLightDir.y));
+      col += vec3(3.0,0.8,0.15)*vData.w*clamp(0.6 - vSy, 0.0, 1.0);
+      float sceneZ = texture2D(tCopy, gl_FragCoord.xy/uRes).a;
+      float soft = clamp((sceneZ - vViewZ)/3.0, 0.0, 1.0);
+      gl_FragColor = vec4(applyFog(col, vWorld), clamp(dens*vData.y*soft, 0.0, 1.0));
+    }`,
+  transparent: true, depthWrite: false,
+});
+const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
+cloudMesh.frustumCulled = false; cloudMesh.layers.set(2); scene.add(cloudMesh);
+
+const parts = [];
+function puff(type, x, y, z, o={}){
+  if (parts.length >= MAXP) return;
+  const r = Math.random;
+  let p;
+  if (type === 'steam') p = { x:x+(r()-0.5), y, z:z+(r()-0.5), vx:(r()-0.5)*0.6, vy:1.5+r()*1.5, vz:(r()-0.5)*0.6, size:0.8, grow:1.6, life:0, max:2.5+r()*1.5, alpha:0.75, heat:0, c:[0.95,0.95,0.97] };
+  else if (type === 'smoke') p = { x, y, z, vx:(r()-0.5)*0.5, vy:1+r(), vz:(r()-0.5)*0.5, size:0.8, grow:1.2, life:0, max:4+r()*2, alpha:0.6, heat:0.3, c:[0.2,0.19,0.18] };
+  else if (type === 'plume'){
+    const big = o.erupt;
+    const g = big ? 0.1+r()*0.08 : 0.22+r()*0.1;
+    p = { x:x+(r()-0.5)*4, y, z:z+(r()-0.5)*4, vx:(r()-0.5)*1.5, vy: big ? 9+r()*7 : 2+r()*2, vz:(r()-0.5)*1.5,
+          size: big ? 5+r()*3 : 3+r()*2, grow: big ? 1.6 : 0.8, life:0, max: big ? 30+r()*15 : 22+r()*10, alpha: big ? 0.8 : 0.55, heat: big ? 1 : 0.15, c:[g,g*0.96,g*0.92], drag:true };
+  }
+  else if (type === 'sky') p = { x, y, z, vx:0, vy:0, vz:0, size:o.size, grow:0, life:0, max:1e9, alpha:o.alpha, heat:0, c:o.c, sky:true };
+  else if (type === 'trail') p = { x, y, z, vx:0, vy:0.5, vz:0, size:0.9, grow:1.5, life:0, max:2.5, alpha:0.55, heat:0.8, c:[0.12,0.11,0.1] };
+  p.seed = Math.random(); parts.push(p);
+}
+// high ash-cloud layer: clusters of large puffs drifting over the island
+{
+  const R = mulberry32(5);
+  for (let c=0; c<9; c++){
+    const cx = -60 + R()*280, cz = -60 + R()*280, cy = 100 + R()*22;
+    const n = 4 + Math.floor(R()*4);
+    for (let k=0; k<n; k++){ const g = 0.3 + R()*0.1; puff('sky', cx+(R()-0.5)*50, cy+(R()-0.5)*8, cz+(R()-0.5)*40, { size: 35+R()*40, alpha: 0.35+R()*0.25, c:[g,g*0.95,g*0.9] }); }
+  }
+}
+const WIND = new THREE.Vector3(1.6, 0, 0.5);
+function updateParts(dt){
+  for (let k=parts.length-1; k>=0; k--){
+    const p = parts[k];
+    p.life += dt;
+    if (p.life > p.max){ parts.splice(k,1); continue; }
+    if (p.sky){
+      p.x += WIND.x*dt*0.6; p.z += WIND.z*dt*0.6;
+      if (p.x > 260) p.x -= 360; if (p.z > 260) p.z -= 360;
+      continue;
+    }
+    if (p.drag){ p.vy *= Math.exp(-0.25*dt); p.vy = Math.max(p.vy, 1.2); }
+    const wf = Math.min(1, Math.max(0, (p.y - 40)/40));
+    p.x += (p.vx + WIND.x*wf)*dt; p.y += p.vy*dt; p.z += (p.vz + WIND.z*wf)*dt;
+    p.size += p.grow*dt; p.heat *= Math.exp(-0.6*dt);
+  }
+  const cp = camera.position;
+  for (const p of parts) p.d = (p.x-cp.x)**2 + (p.y-cp.y)**2 + (p.z-cp.z)**2;
+  parts.sort((a,b) => b.d - a.d);
+  const n = Math.min(parts.length, MAXP);
+  for (let k=0; k<n; k++){
+    const p = parts[k];
+    const t = p.life/p.max;
+    const env = p.sky ? 1 : Math.min(1, p.life/0.6) * (t > 0.6 ? 1 - (t-0.6)/0.4 : 1);
+    iPos.array.set([p.x,p.y,p.z], k*3);
+    iData.array.set([p.size, p.alpha*env, p.seed, p.heat], k*4);
+    iCol.array.set(p.c, k*3);
+  }
+  iPos.needsUpdate = iData.needsUpdate = iCol.needsUpdate = true;
+  cloudGeo.instanceCount = n; cloudMesh.visible = n > 0;
+}
+
+// ---- lava bombs and block debris
+const bombMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.5,0.5,0.5), new THREE.MeshBasicMaterial({ color: new THREE.Color(6,1.6,0.25) }), 120);
+bombMesh.count = 0; bombMesh.frustumCulled = false; scene.add(bombMesh);
+const debrisMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.16,0.16,0.16), new THREE.MeshLambertMaterial(), 240);
+debrisMesh.count = 0; debrisMesh.frustumCulled = false; scene.add(debrisMesh);
+const bombs = [], debris = [], tempSources = [];
+const _m = new THREE.Matrix4(), _c = new THREE.Color();
+function spawnBomb(){
+  if (bombs.length >= 120) return;
+  const a = Math.random()*Math.PI*2, sp = 4 + Math.random()*8;
+  bombs.push({ x:V.x+0.5, y:LAKE_Y+2, z:V.z+0.5, vx:Math.cos(a)*sp, vy:15+Math.random()*10, vz:Math.sin(a)*sp, tr:0 });
+}
+function updateBombs(dt){
+  for (let k=bombs.length-1; k>=0; k--){
+    const b = bombs[k];
+    b.vy -= 20*dt; b.x += b.vx*dt; b.y += b.vy*dt; b.z += b.vz*dt;
+    b.tr += dt; if (b.tr > 0.08){ b.tr = 0; puff('trail', b.x, b.y, b.z); }
+    const X=Math.floor(b.x), Y=Math.floor(b.y), Z=Math.floor(b.z);
+    if (b.y < SEA_TOP && get(X,Y,Z) === WATER){ puff('steam', b.x, SEA_TOP, b.z); bombs.splice(k,1); continue; }
+    if (isSolid(get(X,Y,Z)) || b.y < 0 || !inb(X,0,Z)){
+      if (Math.random() < 0.3 && get(X,Y+1,Z) === AIR && inb(X,Y+1,Z)){ setBlock(X,Y+1,Z,LAVA,0); tempSources.push({ i: idx(X,Y+1,Z), t: gameTime + 6 }); }
+      puff('smoke', b.x, b.y+0.5, b.z);
+      bombs.splice(k,1);
+    }
+  }
+  for (let k=0; k<bombs.length; k++){ _m.makeTranslation(bombs[k].x, bombs[k].y, bombs[k].z); bombMesh.setMatrixAt(k,_m); }
+  bombMesh.count = bombs.length; bombMesh.instanceMatrix.needsUpdate = true;
+  for (let k=tempSources.length-1; k>=0; k--){
+    const s = tempSources[k];
+    if (gameTime < s.t) continue;
+    if (blocks[s.i] === LAVA && fl[s.i] === 0){ const x=s.i%W, z=Math.floor(s.i/W)%D, y=Math.floor(s.i/(W*D)); setBlock(x,y,z,BASALT); }
+    tempSources.splice(k,1);
+  }
+  for (let k=debris.length-1; k>=0; k--){
+    const d = debris[k];
+    d.life -= dt; if (d.life <= 0){ debris.splice(k,1); continue; }
+    d.vy -= 18*dt;
+    const ny = d.y + d.vy*dt;
+    if (isSolid(get(Math.floor(d.x), Math.floor(ny), Math.floor(d.z)))){ d.vy = 0; d.vx *= 0.8; d.vz *= 0.8; } else d.y = ny;
+    d.x += d.vx*dt; d.z += d.vz*dt;
+  }
+  for (let k=0; k<debris.length; k++){
+    const d = debris[k]; const s = Math.min(1, d.life*2);
+    _m.makeScale(s,s,s).setPosition(d.x,d.y,d.z); debrisMesh.setMatrixAt(k,_m); debrisMesh.setColorAt(k, _c.setHex(d.col));
+  }
+  debrisMesh.count = debris.length; debrisMesh.instanceMatrix.needsUpdate = true;
+  if (debrisMesh.instanceColor) debrisMesh.instanceColor.needsUpdate = true;
+}
+
+// ---- block highlight
+const hl = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.004,1.004,1.004)), new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.6 }));
+hl.layers.set(2); hl.visible = false; scene.add(hl);
+
+// ---------------------------------------------------------------- post-processing
+const QUAD_V = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+const fsScene = new THREE.Scene(), fsCam = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+const fsMesh = new THREE.Mesh(new THREE.PlaneGeometry(2,2)); fsMesh.frustumCulled = false; fsScene.add(fsMesh);
+const passMat = (uniforms, frag) => new THREE.ShaderMaterial({ uniforms, vertexShader: QUAD_V, fragmentShader: frag, depthTest: false, depthWrite: false });
+function runPass(mat, target){ fsMesh.material = mat; renderer.setRenderTarget(target); renderer.render(fsScene, fsCam); }
+
+const copyMat = passMat({ tColor: { value: null }, tDepth: { value: null }, uNear: { value: camera.near }, uFar: U.uFar }, `
+  uniform sampler2D tColor, tDepth; uniform float uNear, uFar; varying vec2 vUv;
+  void main(){ float d = texture2D(tDepth, vUv).x*2.0 - 1.0; float vz = 2.0*uNear*uFar/(uFar + uNear - d*(uFar - uNear));
+    gl_FragColor = vec4(texture2D(tColor, vUv).rgb, vz); }`);
+const brightMat = passMat({ tSrc: { value: null }, uThreshold: { value: 1.6 } }, `
+  uniform sampler2D tSrc; uniform float uThreshold; varying vec2 vUv;
+  void main(){ vec3 c = min(texture2D(tSrc, vUv).rgb, vec3(60.0)); float l = max(c.r, max(c.g, c.b));
+    float soft = clamp(l - uThreshold + 0.5, 0.0, 1.0); soft = soft*soft*0.5;
+    gl_FragColor = vec4(c*max(soft, l - uThreshold)/max(l, 1e-4), 1.0); }`);
+const downMat = passMat({ tSrc: { value: null }, uTexel: { value: new THREE.Vector2() } }, `
+  uniform sampler2D tSrc; uniform vec2 uTexel; varying vec2 vUv;
+  void main(){ vec3 s = texture2D(tSrc, vUv).rgb*4.0;
+    s += texture2D(tSrc, vUv + vec2(-1.0,-1.0)*uTexel).rgb + texture2D(tSrc, vUv + vec2(1.0,-1.0)*uTexel).rgb;
+    s += texture2D(tSrc, vUv + vec2(-1.0,1.0)*uTexel).rgb + texture2D(tSrc, vUv + vec2(1.0,1.0)*uTexel).rgb;
+    gl_FragColor = vec4(s/8.0, 1.0); }`);
+const upMat = passMat({ tLow: { value: null }, tHigh: { value: null }, uTexel: { value: new THREE.Vector2() } }, `
+  uniform sampler2D tLow, tHigh; uniform vec2 uTexel; varying vec2 vUv;
+  void main(){ vec2 o = uTexel;
+    vec3 s = texture2D(tLow, vUv + vec2(-2.0,0.0)*o).rgb + texture2D(tLow, vUv + vec2(2.0,0.0)*o).rgb
+           + texture2D(tLow, vUv + vec2(0.0,-2.0)*o).rgb + texture2D(tLow, vUv + vec2(0.0,2.0)*o).rgb;
+    s += 2.0*(texture2D(tLow, vUv + vec2(-1.0,1.0)*o).rgb + texture2D(tLow, vUv + vec2(1.0,1.0)*o).rgb
+           + texture2D(tLow, vUv + vec2(-1.0,-1.0)*o).rgb + texture2D(tLow, vUv + vec2(1.0,-1.0)*o).rgb);
+    gl_FragColor = vec4(s/12.0 + texture2D(tHigh, vUv).rgb, 1.0); }`);
+const maskMat = passMat({ tCopy: { value: null }, uSun: { value: new THREE.Vector2() }, uAspect: { value: 1 }, uFar: U.uFar }, `
+  uniform sampler2D tCopy; uniform vec2 uSun; uniform float uAspect, uFar; varying vec2 vUv;
+  void main(){ float sky = step(uFar*0.98, texture2D(tCopy, vUv).a);
+    vec2 d = vUv - uSun; d.x *= uAspect;
+    float m = sky*pow(max(0.0, 1.0 - length(d)/0.55), 2.5);
+    gl_FragColor = vec4(m, m, m, 1.0); }`);
+const raysMat = passMat({ tMask: { value: null }, uSun: { value: new THREE.Vector2() } }, `
+  uniform sampler2D tMask; uniform vec2 uSun; varying vec2 vUv;
+  void main(){ const int N = 64; vec2 delta = (vUv - uSun)/float(N)*0.95; vec2 c = vUv; float illum = 1.0, acc = 0.0;
+    for (int i=0; i<N; i++){ c -= delta; acc += texture2D(tMask, c).r*illum; illum *= 0.97; }
+    acc /= 20.0; gl_FragColor = vec4(acc, acc, acc, 1.0); }`);
+const finalMat = passMat({ tScene: { value: null }, tBloom: { value: null }, tRays: { value: null }, uBloom: { value: 0.9 },
+  uExposure: { value: 1 }, uUnder: { value: 0 }, uTime: U.uTime, uRayCol: { value: new THREE.Color() }, uLavaFx: { value: 0 } }, `
+  uniform sampler2D tScene, tBloom, tRays; uniform float uBloom, uExposure, uUnder, uTime, uLavaFx; uniform vec3 uRayCol; varying vec2 vUv;
+  vec3 aces(vec3 x){ return clamp((x*(2.51*x + 0.03))/(x*(2.43*x + 0.59) + 0.14), 0.0, 1.0); }
+  void main(){
+    vec2 uv = vUv;
+    if (uUnder > 0.5) uv += vec2(sin(uv.y*30.0 + uTime*2.0), cos(uv.x*25.0 + uTime*1.7))*0.0025;
+    vec3 c = texture2D(tScene, uv).rgb + texture2D(tBloom, uv).rgb*uBloom + texture2D(tRays, uv).r*uRayCol;
+    if (uUnder > 0.5) c = c*vec3(0.3,0.7,0.85) + vec3(0.0,0.025,0.045);
+    c = aces(c*uExposure);
+    vec2 q = vUv - 0.5; c *= 1.0 - dot(q,q)*0.6;
+    c = mix(c, vec3(1.0,0.3,0.05), uLavaFx*0.6);
+    c = pow(c, vec3(1.0/2.2));
+    c += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898,78.233)))*43758.5453) - 0.5)/255.0;
+    gl_FragColor = vec4(c, 1.0);
+  }`);
+
+let rtMain, rtCopy, rtRefl, rtMask, rtRays, bloomDown = [], bloomUp = [];
+function makeRT(w, h, depth){
+  return new THREE.WebGLRenderTarget(Math.max(1,w), Math.max(1,h), { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: !!depth });
+}
+function createTargets(){
+  for (const t of [rtMain, rtCopy, rtRefl, rtMask, rtRays, ...bloomDown, ...bloomUp]) if (t){ if (t.depthTexture) t.depthTexture.dispose(); t.dispose(); }
+  const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+  const w = size.x, h = size.y;
+  rtMain = makeRT(w, h, true); rtMain.depthTexture = new THREE.DepthTexture(w, h);
+  rtCopy = makeRT(w, h, false);
+  rtRefl = makeRT(w>>1, h>>1, true);
+  rtMask = makeRT(w>>1, h>>1, false); rtRays = makeRT(w>>1, h>>1, false);
+  bloomDown = []; bloomUp = [];
+  for (let k=1; k<=6; k++){ bloomDown.push(makeRT(w>>k, h>>k, false)); bloomUp.push(makeRT(w>>k, h>>k, false)); }
+  U.uRes.value.set(w, h);
+}
+createTargets();
+addEventListener('resize', () => {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  createTargets();
+});
+
+// planar reflection camera (mirror across the sea surface)
+const reflCam = new THREE.PerspectiveCamera(); reflCam.layers.set(0);
+const texMatrix = waterMat.uniforms.uTexMatrix.value;
+const clipPlanes = [new THREE.Plane(new THREE.Vector3(0,1,0), -(SEA_TOP - 0.1))];
+const _rp = new THREE.Vector3(), _cp = new THREE.Vector3(), _rot = new THREE.Matrix4(), _look = new THREE.Vector3(), _tgt = new THREE.Vector3(), _view = new THREE.Vector3(), _n = new THREE.Vector3(0,1,0);
+function updateReflCam(){
+  _cp.copy(camera.position); _rp.set(_cp.x, SEA_TOP, _cp.z);
+  _view.subVectors(_rp, _cp).reflect(_n).negate().add(_rp);
+  _rot.extractRotation(camera.matrixWorld);
+  _look.set(0,0,-1).applyMatrix4(_rot).add(_cp);
+  _tgt.subVectors(_rp, _look).reflect(_n).negate().add(_rp);
+  reflCam.position.copy(_view);
+  reflCam.up.set(0,1,0).applyMatrix4(_rot).reflect(_n);
+  reflCam.lookAt(_tgt);
+  reflCam.near = camera.near; reflCam.far = camera.far;
+  reflCam.updateMatrixWorld();
+  reflCam.projectionMatrix.copy(camera.projectionMatrix);
+  texMatrix.set(0.5,0,0,0.5, 0,0.5,0,0.5, 0,0,0.5,0.5, 0,0,0,1).multiply(reflCam.projectionMatrix).multiply(reflCam.matrixWorldInverse);
+}
+
+const _sp = new THREE.Vector3(), _cd = new THREE.Vector3();
+function render(){
+  U.uCamPos.value.copy(camera.position);
+  sky.position.copy(camera.position);
+  renderer.shadowMap.needsUpdate = true;
+  // 1. opaque scene (terrain, lava, sky, bombs) into HDR target with depth
+  camera.layers.set(0);
+  renderer.setRenderTarget(rtMain); renderer.clear(); renderer.render(scene, camera);
+  // 2. copy colour + linear depth so water and particles can read them
+  copyMat.uniforms.tColor.value = rtMain.texture; copyMat.uniforms.tDepth.value = rtMain.depthTexture;
+  runPass(copyMat, rtCopy);
+  // 3. planar reflection
+  updateReflCam();
+  renderer.setRenderTarget(rtRefl); renderer.clear();
+  renderer.clippingPlanes = clipPlanes; U.uClipY.value = SEA_TOP - 0.1;
+  renderer.render(scene, reflCam);
+  renderer.clippingPlanes = []; U.uClipY.value = -1e9;
+  // 4. water, then transparent particles
+  waterMat.uniforms.tCopy.value = rtCopy.texture; waterMat.uniforms.tRefl.value = rtRefl.texture; cloudMat.uniforms.tCopy.value = rtCopy.texture;
+  renderer.setRenderTarget(rtMain);
+  camera.layers.set(1); renderer.render(scene, camera);
+  camera.layers.set(2); renderer.render(scene, camera);
+  camera.layers.set(0);
+  // 5. bloom (threshold + dual-filter pyramid)
+  brightMat.uniforms.tSrc.value = rtMain.texture; runPass(brightMat, bloomDown[0]);
+  for (let k=1; k<bloomDown.length; k++){
+    downMat.uniforms.tSrc.value = bloomDown[k-1].texture;
+    downMat.uniforms.uTexel.value.set(1/bloomDown[k-1].width, 1/bloomDown[k-1].height);
+    runPass(downMat, bloomDown[k]);
+  }
+  let low = bloomDown[bloomDown.length-1];
+  for (let k=bloomDown.length-2; k>=0; k--){
+    upMat.uniforms.tLow.value = low.texture; upMat.uniforms.tHigh.value = bloomDown[k].texture;
+    upMat.uniforms.uTexel.value.set(1/low.width, 1/low.height);
+    runPass(upMat, bloomUp[k]); low = bloomUp[k];
+  }
+  // 6. sun / moon rays: sky mask + radial blur toward the light
+  _sp.copy(camera.position).addScaledVector(U.uLightDir.value, 1000).project(camera);
+  camera.getWorldDirection(_cd);
+  const front = _cd.dot(U.uLightDir.value) > 0.05;
+  const fade = front ? Math.min(1, Math.max(0, 1.6 - Math.max(Math.abs(_sp.x), Math.abs(_sp.y)))) : 0;
+  maskMat.uniforms.tCopy.value = rtCopy.texture; maskMat.uniforms.uSun.value.set(_sp.x*0.5+0.5, _sp.y*0.5+0.5);
+  maskMat.uniforms.uAspect.value = camera.aspect;
+  runPass(maskMat, rtMask);
+  raysMat.uniforms.tMask.value = rtMask.texture; raysMat.uniforms.uSun.value.copy(maskMat.uniforms.uSun.value);
+  runPass(raysMat, rtRays);
+  finalMat.uniforms.uRayCol.value.copy(lightState.rayCol).multiplyScalar(fade);
+  // 7. composite, tone map, output
+  finalMat.uniforms.tScene.value = rtMain.texture; finalMat.uniforms.tBloom.value = bloomUp[0].texture; finalMat.uniforms.tRays.value = rtRays.texture;
+  runPass(finalMat, null);
+}
+
+// ---------------------------------------------------------------- day / night
+let dayT = num('time', 0.29);
+const lightState = { rayCol: new THREE.Color(), dayF: 1 };
+const sunDir = new THREE.Vector3(), moonDir = new THREE.Vector3();
+function updateSky(ash){
+  const th = (dayT - 0.25)*Math.PI*2;
+  sunDir.set(Math.cos(th), Math.sin(th), 0.38).normalize();
+  moonDir.copy(sunDir).negate();
+  U.uSunDir.value.copy(sunDir); U.uMoonDir.value.copy(moonDir); U.uStarRot.value = th;
+  const e = sunDir.y;
+  const dayF = ss(-0.18, 0.2, e), sunset = Math.exp(-((e*4)**2));
+  const sunI = ss(-0.04, 0.12, e), moonI = ss(0.04, -0.14, e);
+  lightState.dayF = dayF;
+  const warm = ss(0.02, 0.4, e);
+  let lc, strength;
+  if (e > 0){ lc = new THREE.Color(1, lerp(0.5,0.95,warm), lerp(0.2,0.88,warm)); strength = sunI*(1 - ash*0.5); U.uLightDir.value.copy(sunDir); }
+  else { lc = new THREE.Color(0.55, 0.65, 1.0); strength = moonI*0.16; U.uLightDir.value.copy(moonDir); }
+  sunLight.color.copy(lc); sunLight.intensity = strength*5.2;
+  U.uLightCol.value.copy(lc).multiplyScalar(strength*3);
+  lightState.rayCol.copy(lc).multiplyScalar(e > 0 ? 0.7*sunI*(1 - ash*0.6) : 0.25*moonI);
+  // sky dome horizon average -> fog and ambient
+  const fc = scene.fog.color;
+  fc.setRGB(lerp(0.02,0.55,dayF), lerp(0.03,0.70,dayF), lerp(0.06,0.88,dayF));
+  fc.lerp(new THREE.Color(0.85*dayF, 0.38*dayF, 0.16*dayF), sunset*0.55);
+  const ashC = 0.30*(0.08 + 0.92*dayF);
+  fc.lerp(new THREE.Color(ashC, ashC*0.87, ashC*0.77), ash*0.5);
+  scene.fog.density = 0.0028 + ash*0.003;
+  U.uFogDensity.value = scene.fog.density;
+  hemi.color.setRGB(lerp(0.025,0.55,dayF) + 0.2*sunset, lerp(0.035,0.66,dayF) + 0.08*sunset, lerp(0.09,0.92,dayF));
+  hemi.groundColor.setRGB(lerp(0.03,0.22,dayF), lerp(0.03,0.18,dayF), lerp(0.05,0.14,dayF));
+  hemi.intensity = 2.2;
+  U.uAmbient.value.copy(hemi.color).multiplyScalar(0.8);
+  finalMat.uniforms.uExposure.value = lerp(1.9, 0.95, ss(-0.25, 0.02, e));
+  // shadow camera follows the player
+  const c = player.pos;
+  const sx = Math.round(c.x/2)*2, sz = Math.round(c.z/2)*2, sy = Math.round(c.y/2)*2;
+  sunLight.target.position.set(sx, sy, sz);
+  sunLight.position.set(sx, sy, sz).addScaledVector(U.uLightDir.value, 200);
+  sunLight.target.updateMatrixWorld();
+}
+
+// ---------------------------------------------------------------- player
+const player = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw: -Math.PI/2, pitch: 0.05, onGround: false, fly: false, inWater: false, lavaT: 0 };
+const keys = {};
+let gameTime = 0, shake = 0;
+function collides(px,py,pz){
+  for (let x=Math.floor(px-0.3); x<=Math.floor(px+0.3-1e-6); x++)
+    for (let y=Math.floor(py); y<=Math.floor(py+1.8-1e-6); y++)
+      for (let z=Math.floor(pz-0.3); z<=Math.floor(pz+0.3-1e-6); z++)
+        if (isSolid(get(x,y,z))) return { x, y, z };
+  return null;
+}
+function moveAxis(a, d){
+  if (!d) return;
+  const p = player.pos;
+  if (a === 0) p.x += d; else if (a === 1) p.y += d; else p.z += d;
+  const hit = collides(p.x, p.y, p.z);
+  if (!hit) return;
+  if (a === 0) p.x = d > 0 ? hit.x - 0.3 - 1e-4 : hit.x + 1.3 + 1e-4;
+  else if (a === 2) p.z = d > 0 ? hit.z - 0.3 - 1e-4 : hit.z + 1.3 + 1e-4;
+  else { if (d > 0) p.y = hit.y - 1.8 - 1e-4; else { p.y = hit.y + 1 + 1e-4; player.onGround = true; } }
+  if (a === 0) player.vel.x = 0; else if (a === 1) player.vel.y = 0; else player.vel.z = 0;
+}
+function bodyTouches(b){
+  const p = player.pos;
+  for (let y=Math.floor(p.y); y<=Math.floor(p.y+1.7); y++) if (get(Math.floor(p.x), y, Math.floor(p.z)) === b) return true;
+  return false;
+}
+function respawn(){ player.pos.copy(spawn); player.vel.set(0,0,0); }
+function updatePlayer(dt){
+  const yaw = player.yaw, v = player.vel;
+  const fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw);
+  let wx = 0, wz = 0;
+  if (keys.KeyW || keys.ArrowUp){ wx += fx; wz += fz; }
+  if (keys.KeyS || keys.ArrowDown){ wx -= fx; wz -= fz; }
+  if (keys.KeyD || keys.ArrowRight){ wx += rx; wz += rz; }
+  if (keys.KeyA || keys.ArrowLeft){ wx -= rx; wz -= rz; }
+  const wl = Math.hypot(wx, wz); if (wl > 0){ wx /= wl; wz /= wl; }
+  player.inWater = bodyTouches(WATER);
+  let speed = player.fly ? 16 : (keys.ShiftLeft || keys.ShiftRight ? 6.8 : 4.4);
+  if (player.inWater && !player.fly) speed *= 0.55;
+  if (player.fly){
+    v.set(wx*speed, ((keys.Space ? 1 : 0) - (keys.ShiftLeft || keys.ShiftRight ? 1 : 0))*speed*0.7, wz*speed);
+    if (keys.ShiftLeft || keys.ShiftRight){ v.x = wx*speed; v.z = wz*speed; }
+  } else {
+    const k = 1 - Math.exp(-(player.onGround ? 14 : 3)*dt);
+    v.x += (wx*speed - v.x)*k; v.z += (wz*speed - v.z)*k;
+    if (player.inWater){
+      v.y -= 7*dt; v.y *= Math.exp(-2.5*dt);
+      if (keys.Space) v.y = Math.min(v.y + 22*dt, 3.4);
+    } else {
+      v.y -= 24*dt;
+      if (keys.Space && player.onGround){ v.y = 8.2; }
+    }
+    v.y = Math.max(v.y, -50);
+  }
+  const steps = Math.ceil(v.length()*dt/0.35) + 1, sdt = dt/steps;
+  player.onGround = false;
+  for (let s=0; s<steps; s++){ moveAxis(0, v.x*sdt); moveAxis(1, v.y*sdt); moveAxis(2, v.z*sdt); }
+  if (player.pos.y < -10) respawn();
+  // lava burns: respawn after a short delay
+  if (bodyTouches(LAVA)){ player.lavaT += dt; if (player.lavaT > 1.2){ player.lavaT = 0; respawn(); flash('You fell in lava. Back to the beach.'); } }
+  else player.lavaT = Math.max(0, player.lavaT - dt*2);
+}
+function syncCamera(){
+  camera.position.set(player.pos.x, player.pos.y + 1.62, player.pos.z);
+  camera.rotation.set(player.pitch + (Math.random()-0.5)*shake*0.02, player.yaw + (Math.random()-0.5)*shake*0.02, 0);
+  camera.updateMatrixWorld();
+}
+
+// ---------------------------------------------------------------- interaction
+function raycast(maxD = 7){
+  const o = camera.position, d = new THREE.Vector3(); camera.getWorldDirection(d);
+  let x=Math.floor(o.x), y=Math.floor(o.y), z=Math.floor(o.z);
+  const sx=Math.sign(d.x), sy=Math.sign(d.y), sz=Math.sign(d.z);
+  const tdx=Math.abs(1/d.x), tdy=Math.abs(1/d.y), tdz=Math.abs(1/d.z);
+  let tx = d.x ? (sx > 0 ? x+1-o.x : o.x-x)*tdx : Infinity;
+  let ty = d.y ? (sy > 0 ? y+1-o.y : o.y-y)*tdy : Infinity;
+  let tz = d.z ? (sz > 0 ? z+1-o.z : o.z-z)*tdz : Infinity;
+  let n = [0,0,0], t = 0;
+  while (t <= maxD){
+    if (inb(x,y,z)){ const b = blocks[idx(x,y,z)]; if (isSolid(b)) return { x, y, z, n }; }
+    if (tx < ty && tx < tz){ x += sx; t = tx; tx += tdx; n = [-sx,0,0]; }
+    else if (ty < tz){ y += sy; t = ty; ty += tdy; n = [0,-sy,0]; }
+    else { z += sz; t = tz; tz += tdz; n = [0,0,-sz]; }
+  }
+  return null;
+}
+let selected = 0;
+function breakTarget(){
+  const h = raycast(); if (!h) return false;
+  const b = get(h.x,h.y,h.z); if (b === BEDROCK) return false;
+  setBlock(h.x,h.y,h.z,AIR);
+  for (let k=0; k<8 && debris.length<240; k++) debris.push({ x:h.x+0.5, y:h.y+0.5, z:h.z+0.5, vx:(Math.random()-0.5)*4, vy:2+Math.random()*3, vz:(Math.random()-0.5)*4, life:0.9+Math.random()*0.4, col:DEBRIS[b] });
+  return true;
+}
+function placeTarget(){
+  const h = raycast(); if (!h) return false;
+  const x=h.x+h.n[0], y=h.y+h.n[1], z=h.z+h.n[2];
+  if (!inb(x,y,z)) return false;
+  const cur = get(x,y,z); if (cur !== AIR && !isFluid(cur)) return false;
+  const b = HOTBAR[selected];
+  if (isSolid(b)){
+    const p = player.pos;
+    if (x+1 > p.x-0.3 && x < p.x+0.3 && z+1 > p.z-0.3 && z < p.z+0.3 && y+1 > p.y && y < p.y+1.8) return false;
+  }
+  setBlock(x,y,z,b,0);
+  return true;
+}
+
+// ---------------------------------------------------------------- eruption
+const erupt = { next: ERUPT_FIRST, active: false, end: 0, sources: [], spawnAcc: 0, bombAcc: 0 };
+function columnTop(x,z){ for (let y=H-1; y>0; y--) if (isSolid(get(x,y,z))) return y; return 0; }
+function placeEruptSource(x,y,z){ if (get(x,y,z) === AIR || get(x,y,z) === LAVA){ setBlock(x,y,z,LAVA,0); erupt.sources.push(idx(x,y,z)); } }
+function startEruption(){
+  if (erupt.active) return;
+  erupt.active = true; erupt.end = gameTime + ERUPT_LEN; erupt.sources = [];
+  for (let k=1; k<=5; k++) placeEruptSource(V.x, LAKE_Y+k, V.z);
+  for (let z=V.z-7; z<=V.z+7; z++) for (let x=V.x-7; x<=V.x+7; x++) if (Math.hypot(x-V.x, z-V.z) < 6.5) placeEruptSource(x, LAKE_Y+1, z);
+  const angles = [0.1, Math.PI*0.55, Math.PI*1.05, Math.PI*1.5];
+  angles.push(Math.random()*Math.PI*2);
+  for (const a of angles){
+    let best = null;
+    for (let r=5; r<=11; r+=0.5){
+      const x = Math.round(V.x + Math.cos(a)*r), z = Math.round(V.z + Math.sin(a)*r), t = columnTop(x,z);
+      if (!best || t > best[1]) best = [x,t,z];
+    }
+    placeEruptSource(best[0], best[1]+1, best[2]);
+  }
+  flash('ERUPTION!');
+}
+function endEruption(){
+  erupt.active = false; erupt.next = gameTime + ERUPT_EVERY;
+  for (const i of erupt.sources) if (blocks[i] === LAVA && fl[i] === 0){ const x=i%W, z=Math.floor(i/W)%D, y=Math.floor(i/(W*D)); setBlock(x,y,z,AIR); }
+  erupt.sources = [];
+}
+function updateEruption(dt){
+  if (!erupt.active && gameTime >= erupt.next) startEruption();
+  if (erupt.active && gameTime >= erupt.end) endEruption();
+  const warnT = erupt.next - gameTime;
+  const dist = Math.hypot(player.pos.x - V.x, player.pos.z - V.z);
+  const near = Math.max(0.25, 1 - dist/120);
+  shake = erupt.active ? 1.2*near : (warnT < 8 ? 0.5*near : 0);
+  const rate = erupt.active ? 14 : 1.2;
+  erupt.spawnAcc += dt*rate;
+  while (erupt.spawnAcc > 1){ erupt.spawnAcc--; puff('plume', V.x+0.5, LAKE_Y+3, V.z+0.5, { erupt: erupt.active }); }
+  if (erupt.active){ erupt.bombAcc += dt*6; while (erupt.bombAcc > 1){ erupt.bombAcc--; spawnBomb(); } }
+  const targetAsh = erupt.active ? 1 : 0;
+  U.uAsh.value += (targetAsh - U.uAsh.value)*Math.min(1, dt*0.15);
+}
+
+// lava point lights: one over the crater, three on the nearest lava flows
+let lightAcc = 1;
+const lightTargets = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+const lightOn = [0,0,0];
+function updateLavaLights(dt){
+  lightAcc += dt;
+  if (lightAcc > 0.4){
+    lightAcc = 0;
+    const picks = [];
+    const px = player.pos.x, py = player.pos.y, pz = player.pos.z;
+    for (let n=0; n<3; n++){
+      let bd = 60*60, bi = -1;
+      for (const i of lavaCells){
+        const x=i%W, z=Math.floor(i/W)%D, y=Math.floor(i/(W*D));
+        if (Math.hypot(x-V.x, z-V.z) < 8) continue;
+        const d2 = (x-px)**2 + (y-py)**2 + (z-pz)**2;
+        if (d2 >= bd) continue;
+        if (picks.some(p => (p[0]-x)**2 + (p[2]-z)**2 < 100)) continue;
+        bd = d2; bi = i;
+      }
+      if (bi < 0) break;
+      picks.push([bi%W, Math.floor(bi/(W*D)), Math.floor(bi/W)%D]);
+    }
+    for (let n=0; n<3; n++){
+      if (picks[n]){ lightTargets[n].set(picks[n][0]+0.5, picks[n][1]+1.8, picks[n][2]+0.5); lightOn[n] = 1; } else lightOn[n] = 0;
+    }
+  }
+  const fl0 = 0.85 + 0.15*Math.sin(gameTime*7.3) * Math.sin(gameTime*3.1);
+  lavaLights[0].position.set(V.x+0.5, LAKE_Y+4, V.z+0.5);
+  lavaLights[0].intensity = (erupt.active ? 2600 : 1300)*fl0;
+  for (let n=0; n<3; n++){
+    const L = lavaLights[n+1];
+    if (lightOn[n]){ if (L.intensity < 1) L.position.copy(lightTargets[n]); else L.position.lerp(lightTargets[n], Math.min(1, dt*3)); }
+    L.intensity += ((lightOn[n] ? 260*fl0 : 0) - L.intensity)*Math.min(1, dt*4);
+  }
+}
+
+// ---------------------------------------------------------------- HUD
+const hud = document.getElementById('hud'), warnEl = document.getElementById('warn'), nameEl = document.getElementById('blockname');
+const hotbarEl = document.getElementById('hotbar'), overlay = document.getElementById('overlay');
+function drawIcon(cv, b){
+  const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
+  const S = cv.width/48;
+  const face = (t, a, b2, c, d, e, f, shade) => {
+    g.setTransform(a*S, b2*S, c*S, d*S, e*S, f*S);
+    g.drawImage(atlasCanvas, (t%4)*16, Math.floor(t/4)*16, 16, 16, 0, 0, 16, 16);
+    if (shade){ g.fillStyle = `rgba(0,0,0,${shade})`; g.fillRect(0,0,16,16); }
+  };
+  const t = TEX[b];
+  face(t[0], 22/16, -11/16, 22/16, 11/16, 2, 13, 0);
+  face(t[1], 22/16, 11/16, 0, 22/16, 2, 13, 0.25);
+  face(t[1], 22/16, -11/16, 0, 22/16, 24, 24, 0.45);
+  g.setTransform(1,0,0,1,0,0);
+}
+const slotEls = HOTBAR.map((b, k) => {
+  const s = document.createElement('div'); s.className = 'slot';
+  const cv = document.createElement('canvas'); cv.width = cv.height = 44; drawIcon(cv, b);
+  const n = document.createElement('span'); n.textContent = k+1;
+  s.append(cv, n); s.title = NAMES[b]; hotbarEl.append(s); return s;
+});
+let nameTimer = 0;
+function select(k){
+  selected = (k + HOTBAR.length) % HOTBAR.length;
+  slotEls.forEach((s,i) => s.classList.toggle('sel', i === selected));
+  nameEl.textContent = NAMES[HOTBAR[selected]]; nameEl.style.opacity = 1; nameTimer = 1.5;
+}
+let flashTimer = 0;
+function flash(msg){ warnEl.textContent = msg; flashTimer = 3; }
+let fps = 60;
+function updateHud(dt){
+  fps = lerp(fps, 1/Math.max(dt, 1e-3), 0.05);
+  const hrs = dayT*24, hh = Math.floor(hrs), mm = Math.floor((hrs-hh)*60);
+  const e = sunDir.y;
+  const phase = e > 0.15 ? 'Day' : e > -0.15 ? (dayT < 0.5 ? 'Sunrise' : 'Sunset') : 'Night';
+  let vs;
+  if (erupt.active) vs = `<b>ERUPTING</b> <span class="m">${Math.ceil(erupt.end - gameTime)}s left</span>`;
+  else { const s = Math.max(0, Math.ceil(erupt.next - gameTime)); vs = `calm <span class="m">next eruption ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}</span>`; }
+  hud.innerHTML = `<b>Volcanic Isle</b><br><span class="t">${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}</span> ${phase}<br>Volcano: ${vs}<br>`+
+    `<span class="m">Obsidian formed: ${obsidianMade} · Lava blocks: ${lavaCells.size}</span><br>`+
+    `<span class="m">${player.fly ? 'Flying · ' : ''}${Math.round(fps)} fps · ${player.pos.x.toFixed(0)}, ${player.pos.y.toFixed(0)}, ${player.pos.z.toFixed(0)}</span>`;
+  if (flashTimer > 0){ flashTimer -= dt; if (flashTimer <= 0) warnEl.textContent = ''; }
+  else if (!erupt.active && erupt.next - gameTime < 8){ warnEl.textContent = 'The volcano rumbles…'; }
+  else warnEl.textContent = '';
+  if (nameTimer > 0){ nameTimer -= dt; if (nameTimer <= 0) nameEl.style.opacity = 0; }
+}
+
+// ---------------------------------------------------------------- input
+let locked = false, mining = false, placing = false, actionT = 0;
+const canvas = renderer.domElement;
+overlay.addEventListener('click', () => canvas.requestPointerLock());
+canvas.addEventListener('click', () => { if (!locked) canvas.requestPointerLock(); });
+document.addEventListener('pointerlockchange', () => {
+  locked = document.pointerLockElement === canvas;
+  overlay.style.display = locked || P.has('nohelp') ? 'none' : 'flex';
+  if (!locked){ mining = placing = false; for (const k in keys) keys[k] = false; }
+});
+document.addEventListener('mousemove', e => {
+  if (!locked) return;
+  player.yaw -= e.movementX*0.0022;
+  player.pitch = Math.max(-1.55, Math.min(1.55, player.pitch - e.movementY*0.0022));
+});
+document.addEventListener('mousedown', e => {
+  if (!locked) return;
+  if (e.button === 0){ mining = true; breakTarget(); actionT = 0.25; }
+  if (e.button === 2){ placing = true; placeTarget(); actionT = 0.25; }
+});
+document.addEventListener('mouseup', e => { if (e.button === 0) mining = false; if (e.button === 2) placing = false; });
+document.addEventListener('contextmenu', e => e.preventDefault());
+addEventListener('wheel', e => { select(selected + (e.deltaY > 0 ? 1 : -1)); });
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code.startsWith('Digit')){ const k = parseInt(e.code.slice(5)); if (k >= 1 && k <= 9) select(k-1); }
+  if (e.code === 'KeyF'){ player.fly = !player.fly; player.vel.set(0,0,0); }
+  if (e.code === 'KeyE') startEruption();
+  if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+
+// ---------------------------------------------------------------- boot
+generate();
+respawn();
+if (P.has('cam')){
+  const c = P.get('cam').split(',').map(Number);
+  player.pos.set(c[0], c[1], c[2]); if (c.length > 3) player.yaw = c[3]; if (c.length > 4) player.pitch = c[4];
+  player.fly = true;
+}
+if (P.has('nohelp')) overlay.style.display = 'none';
+if (P.has('erupt')){
+  startEruption();
+  const warp = num('warp', 0);
+  erupt.end = gameTime + warp + ERUPT_LEN;
+  for (let t=0, aw=0, al=0; t<warp; t+=0.05){
+    aw += 0.05; al += 0.05;
+    if (aw >= WATER_TICK){ aw -= WATER_TICK; tickFluid(WATER); }
+    if (al >= LAVA_TICK){ al -= LAVA_TICK; tickFluid(LAVA); }
+  }
+  for (let t=0; t<Math.min(warp, 30); t+=0.1){ gameTime += 0.1; updateEruption(0.1); updateParts(0.1); }
+  parts.forEach(p => { if (!p.sky) p.life = Math.min(p.life, p.max*0.5); });
+  erupt.end = gameTime + ERUPT_LEN;
+}
+for (const ch of chunks) buildChunk(ch);
+dirtyChunks.clear();
+select(0);
+syncCamera();
+
+// ---------------------------------------------------------------- self-test (?test=1)
+function runTests(){
+  const out = [];
+  const ok = (name, cond, extra='') => out.push((cond ? 'PASS ' : 'FAIL ') + name + (extra ? ' (' + extra + ')' : ''));
+  // terrain features
+  let sand = 0, palms = 0;
+  for (let z=0; z<D; z++) for (let x=0; x<W; x++){ const h = heights[z*W+x]; if (blocks[idx(x,h,z)] === SAND && h >= SEA-1) sand++; }
+  for (let i=0; i<blocks.length; i++) if (blocks[i] === LOG) palms++;
+  ok('black sand beaches exist', sand > 300, sand + ' shore columns');
+  ok('palm trees exist', palms > 100, palms + ' log blocks');
+  ok('crater holds a lava lake', lavaCells.size > 50, lavaCells.size + ' lava blocks, lake y=' + LAKE_Y + ', rim y=' + RIM_Y);
+  // test platform high in the sky
+  const bx=20, by=H-14, bz=20;
+  for (let x=0; x<16; x++) for (let z=0; z<16; z++) setBlock(bx+x, by, bz+z, STONE);
+  // walking + gravity
+  player.fly = false; player.pos.set(bx+2.5, by+4, bz+8.5); player.vel.set(0,0,0); player.yaw = -Math.PI/2; player.pitch = 0;
+  for (let k=0; k<60; k++) updatePlayer(1/60);
+  ok('gravity lands the player on the platform', player.onGround && Math.abs(player.pos.y - (by+1)) < 0.01, 'y=' + player.pos.y.toFixed(3));
+  const x0 = player.pos.x;
+  keys.KeyW = true; for (let k=0; k<60; k++) updatePlayer(1/60); keys.KeyW = false;
+  ok('W walks forward (+x when yaw=-90deg)', player.pos.x - x0 > 3, 'moved ' + (player.pos.x - x0).toFixed(2));
+  // mining and placing through the real raycast
+  player.pos.set(bx+4.5, by+1, bz+4.5); player.yaw = -Math.PI/2; player.pitch = -0.7; syncCamera();
+  const h1 = raycast();
+  ok('raycast finds a platform block', !!h1 && h1.y === by, h1 ? `${h1.x},${h1.y},${h1.z}` : 'none');
+  if (h1){ breakTarget(); ok('left click mines the block', get(h1.x,h1.y,h1.z) === AIR); }
+  player.pitch = -0.9; syncCamera();
+  const h2 = raycast();
+  selected = HOTBAR.indexOf(BASALT);
+  if (h2){ placeTarget(); ok('right click places basalt', get(h2.x+h2.n[0], h2.y+h2.n[1], h2.z+h2.n[2]) === BASALT); }
+  else ok('right click places basalt', false, 'no target');
+  select(0);
+  // water flows block by block
+  const wx = bx+12, wz = bz+12;
+  setBlock(wx, by+1, wz, WATER, 0);
+  tickFluid(WATER);
+  const one = get(wx+1, by+1, wz) === WATER, notFar = get(wx+3, by+1, wz) !== WATER;
+  tickFluid(WATER); tickFluid(WATER);
+  ok('water spreads one block per tick', one && notFar && get(wx+3, by+1, wz) === WATER);
+  // lava next to water -> obsidian
+  const ox = bx+30;
+  for (let x=0; x<16; x++) for (let z=0; z<16; z++) setBlock(ox+x, by, bz+z, STONE);
+  const lx = ox+6, lz = bz+8;
+  const before = obsidianMade;
+  setBlock(lx, by+1, lz, LAVA, 0); setBlock(lx+3, by+1, lz, WATER, 0);
+  for (let k=0; k<12; k++){ tickFluid(WATER); tickFluid(LAVA); }
+  let lavaWet = 0;
+  for (let x=lx-4; x<lx+8; x++) for (let z=lz-3; z<=lz+2; z++) if (get(x,by+1,z) === LAVA && touches(x,by+1,z,WATER)) lavaWet++;
+  ok('lava touching water turns to obsidian', obsidianMade > before && lavaWet === 0, 'obsidian made ' + (obsidianMade - before) + ', lava still touching water ' + lavaWet);
+  // eruption sends lava down the flanks
+  if (!erupt.active) startEruption();
+  for (let k=0; k<200; k++){ tickFluid(LAVA); if (k%2) tickFluid(WATER); }
+  let low = 0, far = 0;
+  for (const i of lavaCells){ const x=i%W, z=Math.floor(i/W)%D, y=Math.floor(i/(W*D)); const dv = Math.hypot(x-V.x, z-V.z); if (dv > 12){ far++; if (y < RIM_Y - 10) low++; } }
+  let seaObs = 0; for (let x=0; x<W; x++) for (let z=0; z<D; z++) if (get(x,SEA+1,z) === OBSIDIAN || get(x,SEA,z) === OBSIDIAN) seaObs++;
+  ok('eruption lava flows down the sides', low > 20, `${far} lava blocks beyond the rim, ${low} of them >10 blocks below rim y=${RIM_Y}; obsidian at sea level ${seaObs}`);
+  endEruption();
+  // hotbar layout
+  const r = hotbarEl.getBoundingClientRect();
+  ok('hotbar is bottom centre', Math.abs((r.left + r.right)/2 - innerWidth/2) < 2 && innerHeight - r.bottom < 40 && slotEls.length === 9, `centre ${((r.left+r.right)/2).toFixed(0)} of ${innerWidth}, gap ${(innerHeight - r.bottom).toFixed(0)}`);
+  return out;
+}
+if (P.has('test')){
+  const res = runTests();
+  const el = document.getElementById('test-result');
+  el.style.display = 'block';
+  el.textContent = res.join('\n');
+  respawn(); syncCamera();
+  for (const ch of chunks) buildChunk(ch);
+  dirtyChunks.clear();
+}
+
+// ---------------------------------------------------------------- main loop
+let last = performance.now(), accW = 0, accL = 0, frames = 0;
+function frame(now){
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, Math.max(0, (now - last)/1000)); last = now;
+  gameTime += dt; frames++;
+  U.uTime.value = gameTime;
+  dayT = (dayT + dt*(keys.KeyT ? 40 : 1)/DAY_LEN) % 1;
+  updatePlayer(dt);
+  if (locked && (mining || placing)){ actionT -= dt; if (actionT <= 0){ actionT = 0.25; if (mining) breakTarget(); else placeTarget(); } }
+  accW += dt; accL += dt;
+  for (let n=0; accW >= WATER_TICK && n<3; n++){ accW -= WATER_TICK; tickFluid(WATER); }
+  for (let n=0; accL >= LAVA_TICK && n<3; n++){ accL -= LAVA_TICK; tickFluid(LAVA); }
+  accW = Math.min(accW, WATER_TICK); accL = Math.min(accL, LAVA_TICK);
+  updateEruption(dt);
+  updateBombs(dt);
+  updateParts(dt);
+  updateLavaLights(dt);
+  if (dirtyChunks.size){
+    const list = Array.from(dirtyChunks).map(i => chunks[i]);
+    const px = player.pos.x/CH, pz = player.pos.z/CH;
+    list.sort((a,b) => ((a.cx-px)**2 + (a.cz-pz)**2) - ((b.cx-px)**2 + (b.cz-pz)**2));
+    for (let k=0; k<Math.min(6, list.length); k++){ buildChunk(list[k]); dirtyChunks.delete(list[k].cx + list[k].cz*(W/CH)); }
+  }
+  syncCamera();
+  const h = raycast();
+  if (h){ hl.position.set(h.x+0.5, h.y+0.5, h.z+0.5); hl.visible = true; } else hl.visible = false;
+  updateSky(U.uAsh.value);
+  const eb = get(Math.floor(camera.position.x), Math.floor(camera.position.y), Math.floor(camera.position.z));
+  finalMat.uniforms.uUnder.value = (eb === WATER && camera.position.y - Math.floor(camera.position.y) < 0.87) ? 1 : 0;
+  finalMat.uniforms.uLavaFx.value = Math.min(1, player.lavaT*1.5);
+  render();
+  updateHud(dt);
+  if (frames === 3) document.body.dataset.ready = '1';
+}
+window.__game = { get, setBlock, tickFluid, startEruption, player, erupt, lavaCells, V, RIM_Y, LAKE_Y, renderer };
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

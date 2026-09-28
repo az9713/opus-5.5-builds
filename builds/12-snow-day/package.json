@@ -1,0 +1,16 @@
+{
+  "name": "snow-day",
+  "version": "1.0.0",
+  "description": "Photorealistic multiplayer snow-clearing simulator (localhost only)",
+  "private": true,
+  "type": "commonjs",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "three": "^0.169.0",
+    "ws": "^8.18.0"
+  }
+}

@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Pixel Dragon</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0a0618; overflow: hidden; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+         font: 12px/1 ui-monospace, Consolas, monospace; color: #6d3a9c; }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+  #state span { padding: 0 6px; }
+  #state span.on { color: #f0801e; }
+</style>
+</head>
+<body>
+<canvas id="c" width="256" height="144"></canvas>
+<div id="state"><span data-s="idle">idle</span><span data-s="charge">charge</span><span data-s="fire">fire breath</span></div>
+<script>
+"use strict";
+// ---------------------------------------------------------------------------
+// Fixed 24-color palette. Every pixel on screen is one of these.
+// ---------------------------------------------------------------------------
+const PAL = [
+  "#0a0618", // 0  outline / night black
+  "#160f3c", // 1  sky top
+  "#23185c", // 2  sky
+  "#35207a", // 3  sky
+  "#4d2a8e", // 4  sky
+  "#6d3a9c", // 5  horizon purple
+  "#f6f0d6", // 6  moon
+  "#d9d0b2", // 7  moon shade
+  "#aea68e", // 8  moon crater
+  "#26243a", // 9  mortar
+  "#3f3e52", // 10 stone dark
+  "#5d5c6c", // 11 stone
+  "#7d7c88", // 12 stone light
+  "#a4a3ac", // 13 stone highlight
+  "#173828", // 14 dragon darkest
+  "#2a6340", // 15 dragon dark
+  "#449251", // 16 dragon mid
+  "#8cc56a", // 17 dragon light
+  "#e0c07a", // 18 belly
+  "#6e1a1c", // 19 ember dark red
+  "#c83a1c", // 20 red
+  "#f0801e", // 21 orange
+  "#ffd23c", // 22 yellow
+  "#fff6dc", // 23 white-hot
+];
+const RGB = PAL.map(h => [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16)));
+
+const W = 256, H = 144, T = 255;           // T = transparent index
+const fb = new Uint8Array(W * H);          // indexed framebuffer
+const cv = document.getElementById("c");
+const ctx = cv.getContext("2d");
+const img = ctx.createImageData(W, H);
+
+// 4x4 Bayer matrix for ordered dithering (values 0..1)
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
+const bayer = (x, y) => BAYER[(y & 3) * 4 + (x & 3)];
+
+// Small deterministic PRNG so every loop plays the same hand-timed way
+function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
+const hash = (x, y) => { let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+
+// ---------------------------------------------------------------------------
+// Static background: sky, stars, moon, far tower, castle wall
+// ---------------------------------------------------------------------------
+const WALL_TOP = 98;                       // top of the cap stones
+const bg = new Uint8Array(W * H);
+const stars = [];
+
+function buildBackground() {
+  const put = (x, y, c) => { if (x >= 0 && y >= 0 && x < W && y < H) bg[y * W + x] = c; };
+  // Sky: indigo (top) to purple (horizon), banded with dithered seams
+  const bands = [1, 2, 3, 4, 5];
+  for (let y = 0; y < H; y++) {
+    const f = Math.min(1, y / 104) * (bands.length - 1);
+    const i = Math.floor(f), frac = f - i;
+    for (let x = 0; x < W; x++) {
+      const c = (frac > 0.55 && bayer(x, y) < (frac - 0.55) / 0.45) ? bands[Math.min(i + 1, 4)] : bands[i];
+      bg[y * W + x] = c;
+    }
+  }
+  // Moon: halo, disc, shading and craters
+  const mx = 196, my = 36, mr = 19;
+  for (let y = my - mr - 8; y <= my + mr + 8; y++) for (let x = mx - mr - 8; x <= mx + mr + 8; x++) {
+    const d = Math.hypot(x + 0.5 - mx, y + 0.5 - my);
+    if (d > mr && d < mr + 7) {
+      const s = 1 - (d - mr) / 7;
+      if (bayer(x, y) < s * 0.55) { const c = bg[y * W + x]; put(x, y, Math.min(5, c + 1)); }
+    }
+  }
+  for (let y = my - mr; y <= my + mr; y++) for (let x = mx - mr; x <= mx + mr; x++) {
+    const d = Math.hypot(x + 0.5 - mx, y + 0.5 - my);
+    if (d <= mr) {
+      // terminator on the lower-left edge
+      const e = Math.hypot(x + 0.5 - (mx + 5), y + 0.5 - (my - 5));
+      put(x, y, e > mr + 1 ? 7 : 6);
+    }
+  }
+  const craters = [[-7, -4, 3.2], [4, 6, 4.2], [8, -8, 2.2], [-3, 9, 2.0], [-10, 5, 1.6], [2, -1, 1.4]];
+  for (const [cx, cy, r] of craters) for (let y = -5; y <= 5; y++) for (let x = -5; x <= 5; x++) {
+    const d = Math.hypot(x, y);
+    if (d <= r) put(mx + cx + x, my + cy + y, d > r - 1 && x + y > 0 ? 7 : 8);
+  }
+  // Stars (fixed positions; some twinkle)
+  const r = rng(7);
+  for (let n = 0; n < 70; n++) {
+    const x = Math.floor(r() * W), y = Math.floor(r() * 84);
+    if (Math.hypot(x - mx, y - my) < mr + 10 || (x > 15 && x < 39 && y > 48)) continue;
+    const big = r() < 0.12;
+    stars.push({ x, y, big, phase: Math.floor(r() * 24), c: r() < 0.5 ? 6 : 13 });
+  }
+  // Far tower silhouette with a lit window
+  for (let y = 58; y < WALL_TOP; y++) for (let x = 20; x < 34; x++) put(x, y, 2);
+  for (let x = 18; x < 36; x++) for (let y = 54; y < 58; y++) put(x, y, 2);
+  for (let x = 18; x < 36; x += 4) for (let y = 51; y < 54; y++) { put(x, y, 2); put(x + 1, y, 2); }
+  put(26, 66, 22); put(27, 66, 22); put(26, 67, 21); put(27, 67, 21);
+  for (let x = 0; x < 60; x++) { const h = 92 + Math.round(3 * Math.sin(x * 0.11) + 2 * Math.sin(x * 0.37)); for (let y = h; y < WALL_TOP; y++) put(x, y, 2); }
+  for (let x = 60; x < W; x++) { const h = 93 + Math.round(2 * Math.sin(x * 0.07) + 1.5 * Math.sin(x * 0.29)); for (let y = h; y < WALL_TOP; y++) put(x, y, 2); }
+
+  // Castle wall: cap stones, merlons, brick face
+  const brick = (x0, y0, w, h, seed) => {
+    const base = hash(seed, 3) < 0.35 ? 12 : 11;
+    for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) {
+      let c = base;
+      if (y === y0 || x === x0) c = base + 1;                    // lit top-left edge
+      if (y === y0 + h - 1 || x === x0 + w - 1) c = 10;          // shaded bottom-right edge
+      const n = hash(x * 3 + seed, y * 7);
+      if (c === base && n < 0.06) c = 10;                        // pits
+      if (c === base && n > 0.965) c = base + 1;                 // flecks
+      put(x, y, c);
+    }
+    if (hash(seed, 9) < 0.3) {                                   // a crack
+      let cx = x0 + 2 + Math.floor(hash(seed, 11) * (w - 5)), cy = y0 + 1;
+      while (cy < y0 + h - 1) { put(cx, cy, 9); cy++; cx += hash(seed, cy) < 0.5 ? 0 : (hash(cy, seed) < 0.5 ? 1 : -1); }
+    }
+  };
+  // mortar fill
+  for (let y = WALL_TOP; y < H; y++) for (let x = 0; x < W; x++) put(x, y, 9);
+  // merlons above the cap (none where the dragon sits)
+  const merlons = [2, 150, 178, 206, 234];
+  for (const mx0 of merlons) {
+    for (let y = 88; y < WALL_TOP; y++) for (let x = mx0; x < mx0 + 16; x++) put(x, y, 9);
+    brick(mx0 + 1, 89, 14, 5, mx0 * 13);
+    brick(mx0 + 1, 94, 6, 4, mx0 * 17); brick(mx0 + 8, 94, 7, 4, mx0 * 19);
+  }
+  // cap row
+  for (let x = -6, k = 0; x < W; x += 12, k++) brick(x + 1, WALL_TOP + 1, 11, 4, 900 + k);
+  for (let x = 0; x < W; x++) put(x, WALL_TOP, 13);
+  // brick courses
+  for (let row = 0, y = WALL_TOP + 6; y < H; row++, y += 8) {
+    const off = row % 2 ? -8 : 0;
+    for (let x = off, k = 0; x < W; x += 16, k++) brick(x + 1, y + 1, 15, 7, row * 101 + k * 7);
+  }
+  // shadow line under the cap
+  for (let x = 0; x < W; x++) put(x, WALL_TOP + 5, 9);
+}
+
+// ---------------------------------------------------------------------------
+// Dragon sprite parts (hand-placed pixels). Keys map to palette indices.
+// ---------------------------------------------------------------------------
+const K = { "1": 14, "2": 15, "3": 16, "4": 17, b: 18, y: 22, k: 0, w: 23, r: 20, m: 19, o: 21, c: 13 };
+
+const BODY = [
+  "..........4..4......",
+  "........4.43.34.....",
+  "......33333333333...",
+  "....3344444333322b..",
+  "...334433333333222b.",
+  "..33443333333333bbb.",
+  "..3433333333333bbbb.",
+  ".3343333322333bbbb..",
+  ".333333222223bbbb...",
+  ".33333222222bbbb....",
+  ".2333222222bbb3.....",
+  "..22222.22.2332.....",
+  "..2222..22..233.....",
+  ".c2c2c..c2c.c2c.....",
+];
+const HEAD = [
+  "b.....b...........",
+  ".bb....b..........",
+  "..bb2..bb.........",
+  "...33333333333....",
+  "..3344yw2333333...",
+  ".33444yk333333333.",
+  ".3333333333333k33.",
+  ".333333333333333..",
+  "..33333333333333..",
+];
+const JAW = [
+  "...bbbbbbbbbbbb.",
+  "....bbbbbbbbb...",
+  ".....bbbbbb.....",
+];
+const WING_FOLDED = [
+  "....4.......",
+  "...414......",
+  "..411114....",
+  ".4111114....",
+  ".4111114....",
+  "41111114....",
+  ".4111124....",
+  "..41124.....",
+  "...424......",
+];
+const WING_HALF = [
+  "4...........",
+  ".44.........",
+  ".2344.......",
+  ".22234......",
+  "..222234....",
+  "..1222234...",
+  "...122222...",
+  "...1122234..",
+  "....112223..",
+  ".....11223..",
+  "......123...",
+];
+const WING_UP = [
+  "4...............",
+  ".44.............",
+  ".2344...........",
+  ".22234.4........",
+  "..22223.44......",
+  "..222223..4.....",
+  "..1222223..4....",
+  "...122222344....",
+  "...11222222234..",
+  "....1122222223..",
+  ".....11222223...",
+  "......112223....",
+  ".......1123.....",
+];
+
+// ---------------------------------------------------------------------------
+// Timeline: 12 ticks per second, one tick = one drawn frame (animated "on ones")
+// ---------------------------------------------------------------------------
+const FPS = 12;
+const IDLE_END = 48, CHARGE_END = 68, FIRE_END = 98, LOOP = 112;
+
+// Hand-timed key tables. Each entry is held for its tick count.
+const BREATH_IDLE = [0,0,0,0,0,1,1,1,2,2,2,2,2,1,1,0];        // exhale-rest-inhale-hold
+const TAIL_KEYS = [                                            // [base angle, curl per seg, lift]
+  [0.00, 0.11, 0], [0.00, 0.11, 0], [0.02, 0.13, 0], [0.04, 0.16, 1],
+  [0.04, 0.18, 1], [0.04, 0.18, 1], [0.02, 0.15, 0], [0.00, 0.12, 0],
+  [-0.02, 0.09, 0], [-0.02, 0.08, 0], [-0.02, 0.08, 0], [0.00, 0.10, 0],
+];
+const SHAKE = [[2,0],[-2,1],[1,-2],[-1,2],[2,1],[0,-1],[-1,0],[1,1],[0,-1],[-1,1],[1,0],[0,1],[-1,-1],[1,0],[0,0],[1,-1]];
+const FLICKER = [1.0, 0.85, 0.95, 0.75, 1.0, 0.9, 0.8, 0.95];
+
+function pose(t) {
+  const p = { phase: "idle", breath: 0, hx: 0, hy: 0, jaw: 0, wing: 0, farWing: false, blink: 0,
+              glow: 0, glowUp: 0, shake: [0, 0], fire: false, smoke: false, spark: false, light: 0 };
+  p.tail = TAIL_KEYS[Math.floor(t / 3) % TAIL_KEYS.length];
+  if (t < IDLE_END) {
+    p.breath = BREATH_IDLE[t % 16];
+    p.hy = p.breath === 2 ? -1 : 0;
+    const b = t % 48;                                            // blink: half, shut, shut, half
+    if (b === 21 || b === 24) p.blink = 1; else if (b === 22 || b === 23) p.blink = 2;
+    if (b === 40 || b === 42) p.blink = 1; else if (b === 41) p.blink = 2;
+  } else if (t < CHARGE_END) {
+    const c = t - IDLE_END;                                      // 0..19
+    p.phase = "charge";
+    // anticipation: head draws back and up in held steps
+    const HX = [0,-1,-1,-2,-2,-2,-3,-3,-3,-3,-4,-4,-4,-4,-4,-5,-5,-5,-5,-5];
+    const HY = [0,-1,-1,-1,-2,-2,-2,-3,-3,-3,-3,-3,-4,-4,-4,-4,-4,-5,-5,-5];
+    p.hx = HX[c]; p.hy = HY[c];
+    p.breath = c < 3 ? 1 : c < 8 ? 2 : 3;
+    p.wing = c < 5 ? 0 : c < 11 ? 1 : 2;
+    p.farWing = c >= 11;
+    const G = [0,0,0.1,0.15,0.2,0.3,0.35,0.4,0.5,0.55,0.6,0.7,0.7,0.8,0.85,0.9,0.95,1,1,1];
+    p.glow = G[c] * (c > 14 && c % 2 ? 0.9 : 1);
+    p.glowUp = c < 14 ? 0 : (c - 13) / 6;                       // heat climbs the throat
+    p.spark = c >= 12 && c % 3 === 0;
+    p.jaw = c >= 17 ? 1 : 0;
+    p.blink = c >= 16 ? 1 : 0;                                   // squint before the blast
+  } else if (t < FIRE_END) {
+    const f = t - CHARGE_END;                                    // 0..29
+    p.phase = "fire";
+    const HX = [3,4,4,4,3,3,4,4,3,3];
+    p.hx = f < 2 ? 4 : HX[f % HX.length];
+    p.hy = f < 2 ? 1 : (f % 6 < 3 ? 1 : 2);
+    p.jaw = f < 26 ? 3 : 2;
+    p.breath = f < 3 ? 1 : 0;
+    p.wing = f % 8 < 4 ? 2 : 1;
+    p.farWing = true;
+    p.glow = Math.max(0, 0.6 - f * 0.03);
+    p.glowUp = 1;
+    p.fire = f < 26;
+    p.light = f < 26 ? FLICKER[f % FLICKER.length] * (f < 3 ? 0.6 + f * 0.15 : 1) : (30 - f) * 0.12;
+    const amp = f < 4 ? 1 : f < 22 ? 0.5 : 0;
+    const s = SHAKE[f % SHAKE.length];
+    p.shake = amp === 1 ? s : amp ? [Math.sign(s[0]) * (f % 2), Math.sign(s[1]) * ((f + 1) % 2)] : [0, 0];
+  } else {
+    const r = t - FIRE_END;                                      // recover 0..13
+    const HX = [2,2,1,1,1,0,0,0,0,0,0,0,0,0];
+    const HY = [1,1,1,0,0,0,0,0,0,0,0,0,0,0];
+    p.hx = HX[r]; p.hy = HY[r];
+    p.jaw = r < 2 ? 2 : r < 4 ? 1 : 0;
+    p.wing = r < 3 ? 1 : 0;
+    p.breath = r < 6 ? 0 : 1;
+    p.smoke = r < 8;
+    p.blink = r === 9 ? 1 : r === 10 ? 2 : r === 11 ? 1 : 0;
+  }
+  return p;
+}
+
+// ---------------------------------------------------------------------------
+// Dragon compositing into its own small buffer, then auto-outline
+// ---------------------------------------------------------------------------
+const DW = 90, DH = 64;
+const dbuf = new Uint8Array(DW * DH);
+const wingMask = new Uint8Array(DW * DH);  // 1 where a wing pixel sits (the chest glow skips these)
+const DX = 34, DY = WALL_TOP - DH + 1;     // dragon buffer placement on screen (bottom = cap top)
+const BX = 30, BY = DH - 15;               // body grid position inside dragon buffer
+
+function dput(x, y, c) { x = Math.round(x); y = Math.round(y); if (x >= 0 && y >= 0 && x < DW && y < DH) dbuf[y * DW + x] = c; }
+function drawGrid(g, x0, y0, map, wing) {
+  for (let y = 0; y < g.length; y++) for (let x = 0; x < g[y].length; x++) {
+    const ch = g[y][x]; if (ch === ".") continue;
+    let c = K[ch]; if (map) c = map(c);
+    dput(x0 + x, y0 + y, c);
+    const px = x0 + x, py = y0 + y;
+    if (px >= 0 && py >= 0 && px < DW && py < DH) wingMask[py * DW + px] = wing ? 1 : 0;
+  }
+}
+function disc(cx, cy, r, c) {
+  for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++)
+    for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++)
+      if ((x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2 <= r * r) { dput(x, y, c); if (x >= 0 && y >= 0 && x < DW && y < DH) wingMask[y * DW + x] = 0; }
+}
+
+function drawDragon(p, t) {
+  dbuf.fill(T); wingMask.fill(0);
+  const lift = p.breath >= 2 ? p.breath - 1 : 0;               // how many rows the chest stretches up
+  const neckX = BX + 16, neckY = BY + 3 - lift;
+  const headX = BX + 15 + p.hx, headY = BY - 12 + p.hy - lift;
+
+  // far wing (behind everything, darker)
+  if (p.farWing) drawGrid(WING_UP, BX - 1, BY - 12 - lift, c => (c === 17 ? 15 : 14), true);
+
+  // tail: a chain of discs, pose from the tail key table
+  const [a0, curl, tlift] = p.tail;
+  let tx = BX + 3, ty = BY + 11, ang = Math.PI - 0.05 + a0;
+  const segs = 13;
+  const pts = [];
+  for (let i = 0; i < segs; i++) {
+    pts.push([tx, ty, 2.7 - i * 0.15]);
+    ang += curl * (i > 3 ? 1.3 : 0.3);
+    tx += Math.cos(ang) * 1.6; ty += Math.sin(ang) * 1.6 - (i > 8 ? tlift * 0.4 : 0);
+  }
+  for (const [x, y, r] of pts) disc(x, y, r, 15);
+  for (const [x, y, r] of pts) disc(x, y - 0.6, Math.max(0.6, r - 0.7), 16);
+  const [ex, ey] = pts[pts.length - 1];
+  const sx = Math.round(ex), sy = Math.round(ey) - 1;               // spade tip
+  dput(sx, sy - 2, 15); dput(sx - 1, sy - 1, 15); dput(sx, sy - 1, 16); dput(sx + 1, sy - 1, 15);
+  dput(sx - 1, sy, 15); dput(sx, sy, 15); dput(sx + 1, sy, 14);
+
+  // body with breath stretch: rows 0..8 lifted, row 8 repeated to fill
+  for (let y = 0; y < BODY.length; y++) {
+    const row = BODY[y];
+    const dy = y <= 8 ? -lift : 0;
+    for (let x = 0; x < row.length; x++) if (row[x] !== ".") dput(BX + x, BY + y + dy, K[row[x]]);
+    if (y === 8) for (let l = 1; l <= lift; l++) for (let x = 0; x < row.length; x++) if (row[x] !== ".") dput(BX + x, BY + y - l + 1, K[row[x]]);
+  }
+  if (p.breath >= 3) for (let y = 4; y < 10; y++) dput(BX + 19 - (y > 7 ? 1 : 0), BY + y - lift, 18);   // puffed chest
+
+  // near wing on the shoulder
+  if (p.wing === 0) drawGrid(WING_FOLDED, BX + 5, BY + 1 - lift, null, true);
+  else if (p.wing === 1) drawGrid(WING_HALF, BX + 3, BY - 6 - lift, null, true);
+  else drawGrid(WING_UP, BX + 1, BY - 10 - lift, null, true);
+
+  // neck: curve of discs from shoulders to head, belly stripe on the front
+  const hbx = headX + 4, hby = headY + 8;
+  const cx = neckX + 4, cy = (neckY + hby) / 2 + 1;
+  for (let i = 0; i <= 10; i++) {
+    const s = i / 10, u = 1 - s;
+    const x = u * u * neckX + 2 * u * s * cx + s * s * hbx;
+    const y = u * u * neckY + 2 * u * s * cy + s * s * hby;
+    disc(x, y, 3.0, 16);
+  }
+  for (let i = 0; i <= 10; i++) {
+    const s = i / 10, u = 1 - s;
+    const x = u * u * neckX + 2 * u * s * cx + s * s * hbx;
+    const y = u * u * neckY + 2 * u * s * cy + s * s * hby;
+    disc(x + 1.8, y + 0.8, 1.3, 18);
+  }
+  // spine ridge on the neck
+  for (let i = 2; i <= 8; i += 3) {
+    const s = i / 10, u = 1 - s;
+    const x = u * u * neckX + 2 * u * s * cx + s * s * hbx;
+    const y = u * u * neckY + 2 * u * s * cy + s * s * hby;
+    dput(x - 3, y - 2, 17);
+  }
+
+  // head + jaw
+  const jawY = headY + 9 + p.jaw;
+  if (p.jaw > 0) {                                               // mouth interior
+    for (let y = headY + 8; y < jawY + 1; y++) for (let x = headX + 4; x < headX + 16 - (y - headY - 8); x++) dput(x, y, y === headY + 8 ? 19 : 20);
+  }
+  drawGrid(JAW, headX, jawY);
+  drawGrid(HEAD, headX, headY);
+  if (p.jaw >= 2) {                                              // teeth
+    for (const x of [8, 11, 14]) dput(headX + x, headY + 9, 23);
+    for (const x of [9, 12]) dput(headX + x, jawY - 1, 23);
+  }
+  // eye / blink
+  if (p.blink === 1) { dput(headX + 6, headY + 4, 15); dput(headX + 7, headY + 4, 15); }
+  if (p.blink === 2) { dput(headX + 6, headY + 4, 16); dput(headX + 7, headY + 4, 16); dput(headX + 6, headY + 5, 14); dput(headX + 7, headY + 5, 14); }
+
+  // chest glow (charge): remap pixels near the glow point with dithering
+  if (p.glow > 0) {
+    const gx = BX + 16 + (hbx - BX - 16) * p.glowUp * 0.8, gy = BY + 6 - lift + (hby - BY - 6 + lift) * p.glowUp * 0.8;
+    const R = 3 + p.glow * 5;
+    for (let y = 0; y < DH; y++) for (let x = 0; x < DW; x++) {
+      const c = dbuf[y * DW + x]; if (c === T || wingMask[y * DW + x]) continue;
+      const d = Math.hypot(x - gx, y - gy); if (d > R) continue;
+      const I = p.glow * (1 - d / R) * 1.6, b = bayer(x + DX, y + DY);
+      if (I > b + 0.7) dbuf[y * DW + x] = c === 18 || c === 17 ? 23 : 22;
+      else if (I > b + 0.3) dbuf[y * DW + x] = c === 18 || c === 17 ? 22 : 21;
+      else if (I > b) dbuf[y * DW + x] = c === 14 ? 19 : c === 15 ? 20 : 21;
+    }
+  }
+
+  // auto outline: every empty pixel touching the sprite becomes outline black
+  const out = [];
+  for (let y = 0; y < DH; y++) for (let x = 0; x < DW; x++) {
+    if (dbuf[y * DW + x] !== T) continue;
+    if ((x > 0 && dbuf[y * DW + x - 1] !== T && dbuf[y * DW + x - 1] !== 0) ||
+        (x < DW - 1 && dbuf[y * DW + x + 1] !== T && dbuf[y * DW + x + 1] !== 0) ||
+        (y > 0 && dbuf[(y - 1) * DW + x] !== T && dbuf[(y - 1) * DW + x] !== 0) ||
+        (y < DH - 1 && dbuf[(y + 1) * DW + x] !== T && dbuf[(y + 1) * DW + x] !== 0)) out.push(y * DW + x);
+  }
+  for (const i of out) dbuf[i] = 0;
+
+  return { mouthX: DX + headX + 17, mouthY: DY + headY + 9 + (p.jaw >> 1), noseX: DX + headX + 15, noseY: DY + headY + 5 };
+}
+
+// ---------------------------------------------------------------------------
+// Particles: fire, embers, smoke — all stepped once per tick
+// ---------------------------------------------------------------------------
+let parts = [];
+let R = rng(1);
+
+function stepParticles(p, m) {
+  for (const q of parts) {
+    q.age++; q.x += q.vx; q.y += q.vy;
+    if (q.k === "fire") { q.vx *= 0.92; q.vy -= 0.1; q.vy += (R() - 0.5) * 0.5; }
+    else if (q.k === "ember") { q.vx *= 0.96; q.vy += (R() - 0.5) * 0.35; q.x += (R() - 0.5) * 0.8; }
+    else { q.vx *= 0.95; q.vy *= 0.97; }
+  }
+  parts = parts.filter(q => q.age < q.life && q.x < W + 8 && q.y > -8);
+  if (p.fire) {
+    for (let i = 0; i < 10; i++) {
+      const vx = 7.5 + R() * 3.5, lead = R();                  // spread new flame along its first step
+      parts.push({ k: "fire", x: m.mouthX + lead * vx, y: m.mouthY + R() * 2 - 1 + lead,
+        vx, vy: -0.3 + R() * 1.3, age: 0, life: 9 + Math.floor(R() * 8) });
+    }
+    for (let i = 0; i < 2; i++) parts.push({ k: "ember", x: m.mouthX + 10 + R() * 50, y: m.mouthY - 4 + R() * 12,
+      vx: 0.6 + R() * 1.6, vy: -0.4 - R() * 1.2, age: 0, life: 14 + Math.floor(R() * 22) });
+  }
+  if (p.spark) parts.push({ k: "ember", x: m.noseX, y: m.noseY, vx: 0.5 + R(), vy: -0.6 - R() * 0.6, age: 0, life: 6 + Math.floor(R() * 4) });
+  if (p.smoke) for (let i = 0; i < 2; i++) parts.push({ k: "smoke", x: m.mouthX - 1 + R() * 3, y: m.mouthY - 2, vx: 0.2 + R() * 0.6, vy: -0.5 - R() * 0.5, age: 0, life: 12 + Math.floor(R() * 10) });
+}
+
+function drawBlob(x, y, s, c) {
+  x = Math.round(x); y = Math.round(y);
+  const shapes = { 1: ["#"], 2: ["##", "##"], 3: [".#.", "###", ".#."], 4: [".##.", "####", "####", ".##."], 5: [".###.", "#####", "#####", "#####", ".###."] };
+  const g = shapes[s], o = s >> 1;
+  for (let j = 0; j < g.length; j++) for (let i = 0; i < g[j].length; i++)
+    if (g[j][i] === "#") { const px = x + i - o, py = y + j - o; if (px >= 0 && py >= 0 && px < W && py < H) fb[py * W + px] = c; }
+}
+
+function drawParticles(t) {
+  const sorted = parts.slice().sort((a, b) => (b.age / b.life) - (a.age / a.life));
+  for (const q of sorted) {
+    const r = q.age / q.life;
+    if (q.k === "fire") {
+      const c = r < 0.15 ? 23 : r < 0.35 ? 22 : r < 0.6 ? 21 : r < 0.82 ? 20 : 19;
+      const s = r < 0.2 ? 3 : r < 0.5 ? 5 : r < 0.7 ? 4 : r < 0.88 ? 3 : 2;
+      drawBlob(q.x, q.y, s, c);
+    } else if (q.k === "ember") {
+      if ((q.age + (q.life & 3)) % 4 === 3) continue;             // flicker off for one frame
+      const c = r < 0.4 ? 22 : r < 0.75 ? 21 : 19;
+      drawBlob(q.x, q.y, 1, c);
+    } else {
+      const c = r < 0.5 ? 11 : 10;
+      drawBlob(q.x, q.y, r < 0.3 ? 2 : r < 0.7 ? 3 : 2, c);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Frame assembly
+// ---------------------------------------------------------------------------
+const WARM1 = { 9: 19, 10: 19, 11: 20, 12: 20, 13: 21 };
+const WARM2 = { 9: 19, 10: 20, 11: 21, 12: 21, 13: 22 };
+
+function render(t) {
+  const p = pose(t);
+  fb.set(bg);
+  // twinkling stars
+  for (const s of stars) {
+    const k = (t + s.phase) % 24;
+    const i = s.y * W + s.x;
+    if (s.big && k < 18) {
+      fb[i] = 6;
+      if (k > 4 && k < 12) { if (s.x > 0) fb[i - 1] = 7; if (s.x < W - 1) fb[i + 1] = 7; if (s.y > 0) fb[i - W] = 7; fb[i + W] = 7; }
+    } else if (!s.big && k !== 5 && k !== 6) fb[i] = s.c;
+  }
+  const m = drawDragon(p, t);
+  stepParticles(p, m);
+
+  // orange light on the stones while fire is out
+  if (p.light > 0) {
+    let lx = m.mouthX + 30, ly = m.mouthY + 4, n = 0, sx = 0, sy = 0;
+    for (const q of parts) if (q.k === "fire") { sx += q.x; sy += q.y; n++; }
+    if (n) { lx = sx / n; ly = sy / n; }
+    for (let y = 84; y < H; y++) for (let x = 0; x < W; x++) {
+      const c = fb[y * W + x]; if (c < 9 || c > 13) continue;
+      const d1 = Math.hypot((x - lx) * 0.7, (y - ly) * 1.3), d2 = Math.hypot(x - m.mouthX, (y - m.mouthY) * 1.3);
+      const I = p.light * Math.max(1 - d1 / 60, 1 - d2 / 40);
+      if (I <= 0) continue;
+      const b = bayer(x, y);
+      if (I > b + 0.5) fb[y * W + x] = WARM2[c];
+      else if (I > b) fb[y * W + x] = WARM1[c];
+    }
+  }
+
+  // blit dragon over the scene
+  for (let y = 0; y < DH; y++) for (let x = 0; x < DW; x++) {
+    const c = dbuf[y * DW + x]; if (c === T) continue;
+    const sx = DX + x, sy = DY + y; if (sx >= 0 && sy >= 0 && sx < W && sy < H) fb[sy * W + sx] = c;
+  }
+  drawParticles(t);
+
+  // present with screen shake (whole-pixel offsets)
+  const [ox, oy] = p.shake;
+  const d = img.data;
+  for (let y = 0; y < H; y++) {
+    const yy = Math.min(H - 1, Math.max(0, y + oy));
+    for (let x = 0; x < W; x++) {
+      const xx = Math.min(W - 1, Math.max(0, x + ox));
+      const rgb = RGB[fb[yy * W + xx]], o = (y * W + x) * 4;
+      d[o] = rgb[0]; d[o + 1] = rgb[1]; d[o + 2] = rgb[2]; d[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return p;
+}
+
+// ---------------------------------------------------------------------------
+// Scaling (integer only, so pixels stay square and crisp) and the main loop
+// ---------------------------------------------------------------------------
+function fit() {
+  const s = Math.max(1, Math.floor(Math.min(innerWidth / W, (innerHeight - 40) / H)));
+  cv.style.width = W * s + "px"; cv.style.height = H * s + "px";
+}
+addEventListener("resize", fit);
+fit();
+buildBackground();
+
+const labels = [...document.querySelectorAll("#state span")];
+let lastPhase = "";
+function showPhase(ph) {
+  if (ph === lastPhase) return; lastPhase = ph;
+  for (const l of labels) l.classList.toggle("on", l.dataset.s === ph);
+}
+
+// ?frame=N freezes on tick N (the simulation still runs every tick before it)
+const freeze = new URLSearchParams(location.search).get("frame");
+let tick = 0;
+if (freeze !== null) {
+  const N = Math.max(0, parseInt(freeze, 10) || 0);
+  let p;
+  for (let i = 0; i <= N; i++) p = render(i % LOOP);
+  showPhase(p.phase);
+} else {
+  const start = performance.now();
+  (function loop(now) {
+    const want = Math.floor((now - start) / (1000 / FPS));
+    while (tick <= want) { const p = render(tick % LOOP); showPhase(p.phase); tick++; }
+    requestAnimationFrame(loop);
+  })(start);
+}
+</script>
+</body>
+</html>

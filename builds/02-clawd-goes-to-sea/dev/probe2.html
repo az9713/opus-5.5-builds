@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;background:#000">
+<script src="../node_modules/p5/lib/p5.min.js"></script>
+<script src="../node_modules/p5.brush/dist/p5.brush.js"></script>
+<script>
+function setup(){ createCanvas(1280,720,WEBGL); pixelDensity(1); brush.scaleBrushes(2.5); noLoop(); window.ready=true;}
+const T={};
+function tm(k,f){const a=performance.now();f();T[k]=(T[k]||0)+performance.now()-a;}
+function draw(){
+  randomSeed(3);
+  background('#f3e6c8'); translate(-width/2,-height/2);
+  [2,4,6,9].forEach((w,i)=>{const x=40+i*160; tm('penwash',()=>{brush.set('pen','#1d130c',w); brush.wash('#e8742c',255); brush.rect(x,40,120,90); brush.noWash();});});
+  [1,2,3].forEach((w,i)=>{const x=700+i*180; tm('charcoal',()=>{brush.set('2B','#1d130c',w); brush.wash('#e8742c',255); brush.rect(x,40,120,90); brush.noWash();});});
+  [[255,0.2,0.2],[255,0.5,0.3],[200,0.8,0.6]].forEach(([o,tx,bd],i)=>{const x=40+i*200; tm('fill',()=>{brush.noStroke(); brush.fill('#e8742c',o); brush.fillBleed(0.04); brush.fillTexture(tx,bd); brush.rect(x,200,150,110); brush.noFill();});});
+  // wash then light fill on top for texture
+  tm('washfill',()=>{brush.noStroke(); brush.wash('#e8742c',255); brush.rect(700,200,150,110); brush.noWash(); brush.fill('#b8521c',70); brush.fillBleed(0.02); brush.fillTexture(0.9,0.2); brush.rect(700,200,150,110); brush.noFill(); brush.set('pen','#1d130c',5); brush.rect(700,200,150,110);});
+  // hatch texture
+  tm('hatch',()=>{brush.set('pen','#1d130c',5); brush.wash('#e8742c',255); brush.hatch(8, 0.6, {rand:0.1}); brush.hatchStyle('crayon','#c45a1e',0.6); brush.rect(950,200,150,110); brush.noHatch(); brush.noWash();});
+  // many small wash circles cost
+  tm('50circles',()=>{brush.set('pen','#1d130c',3); brush.wash('#2a6fdb',255); for(let i=0;i<50;i++) brush.circle(60+i*24,420+ (i%2)*30,10); brush.noWash();});
+  tm('50nostroke',()=>{brush.noStroke(); brush.wash('#2a6fdb',255); for(let i=0;i<50;i++) brush.circle(60+i*24,520+ (i%2)*30,10); brush.noWash();});
+  tm('50native',()=>{noStroke(); fill('#2a6fdb'); for(let i=0;i<50;i++) circle(60+i*24,620+ (i%2)*30,20);});
+}
+window.go=async()=>{await redraw(); await redraw(); for(const k in T)T[k]/=2; return JSON.stringify(T);};
+</script></body></html>
